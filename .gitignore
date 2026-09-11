@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.log
+
+# C / Rust build artifacts
+target/
+*.o
+*.a
+*.exe
+c_binary
+rust_binary
+
+# Environment & Temporary
+.env
+.env.*
+Temp/
+
+# IDE
+.vscode/
+.idea/
+*.swp
