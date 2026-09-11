@@ -235,53 +235,60 @@ def dashboard():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AEGIS // BITTENSOR C-TO-SAFE-RUST [BAUHAUS EDITION]</title>
+    <title>AEGIS // BITTENSOR C-TO-SAFE-RUST [BAUHAUS NOIR]</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;900&family=JetBrains+Mono:wght@500;700;800&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;900&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bauhaus-bg: #F4F3EE;
-            --bauhaus-black: #111111;
-            --bauhaus-white: #FFFFFF;
-            --bauhaus-red: #E63946;
-            --bauhaus-blue: #1D4ED8;
-            --bauhaus-yellow: #FFB703;
-            --bauhaus-green: #059669;
-            --bauhaus-gray: #E5E5DF;
-            --shadow-hard: 5px 5px 0px #111111;
-            --shadow-hard-sm: 3px 3px 0px #111111;
-            --shadow-hard-lg: 8px 8px 0px #111111;
+            --bg-black: #000000;
+            --surface-1: #0A0A0C;
+            --surface-2: #121215;
+            --surface-3: #1A1A1F;
+            --border-subtle: #222226;
+            --border-strong: #33333A;
+            --text-primary: #FFFFFF;
+            --text-secondary: #A1A1AA;
+            --text-muted: #52525B;
+            --accent-yellow: #F59E0B;
+            --accent-blue: #3B82F6;
+            --accent-emerald: #10B981;
+            --accent-crimson: #EF4444;
+            --shadow-hard: 4px 4px 0px #000000;
+            --shadow-border: 4px 4px 0px #222226;
         }
 
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
-            border-radius: 0 !important; /* Strict Bauhaus: Form follows function, no arbitrary rounding */
+            border-radius: 0 !important; /* Pure Bauhaus geometric discipline */
         }
 
         body {
-            background-color: var(--bauhaus-bg);
-            background-image: radial-gradient(#d1d0c5 1px, transparent 1px);
-            background-size: 20px 20px;
-            color: var(--bauhaus-black);
-            font-family: 'Space Grotesk', -apple-system, sans-serif;
-            padding: 24px;
-            line-height: 1.4;
+            background-color: var(--bg-black);
+            background-image: 
+                linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 32px 32px;
+            color: var(--text-primary);
+            font-family: 'Space Grotesk', sans-serif;
+            padding: 32px 28px;
+            line-height: 1.5;
+            min-height: 100vh;
         }
 
         code, pre, .mono {
             font-family: 'JetBrains Mono', monospace;
         }
 
-        /* Top Bauhaus Masthead */
+        /* Top Header / Masthead */
         .masthead {
-            border: 3px solid var(--bauhaus-black);
-            background: var(--bauhaus-white);
-            box-shadow: var(--shadow-hard);
-            padding: 20px 28px;
-            margin-bottom: 24px;
+            background: var(--surface-1);
+            border: 2px solid var(--border-subtle);
+            box-shadow: var(--shadow-border);
+            padding: 24px 32px;
+            margin-bottom: 28px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -291,404 +298,464 @@ def dashboard():
         .masthead::before {
             content: '';
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 6px;
-            background: linear-gradient(90deg, var(--bauhaus-red) 0% 33.3%, var(--bauhaus-yellow) 33.3% 66.6%, var(--bauhaus-blue) 66.6% 100%);
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent-crimson) 0%, var(--accent-yellow) 50%, var(--accent-blue) 100%);
         }
 
         .brand {
             display: flex;
             align-items: center;
-            gap: 16px;
+            gap: 20px;
         }
 
-        /* Bauhaus geometric insignia */
-        .bauhaus-badge {
+        /* Minimalist Bauhaus Emblem */
+        .emblem {
             display: flex;
-            gap: 4px;
+            gap: 6px;
             align-items: center;
         }
-        .shape-circle {
-            width: 20px;
-            height: 20px;
-            background: var(--bauhaus-red);
-            border: 2px solid var(--bauhaus-black);
-            border-radius: 50% !important; /* Intentional circle primitive */
+        .emblem .shape-circle {
+            width: 18px;
+            height: 18px;
+            border: 2px solid var(--accent-crimson);
+            background: transparent;
+            border-radius: 50% !important;
         }
-        .shape-triangle {
+        .emblem .shape-triangle {
             width: 0;
             height: 0;
-            border-left: 11px solid transparent;
-            border-right: 11px solid transparent;
-            border-bottom: 20px solid var(--bauhaus-yellow);
+            border-left: 9px solid transparent;
+            border-right: 9px solid transparent;
+            border-bottom: 18px solid var(--accent-yellow);
         }
-        .shape-square {
-            width: 20px;
-            height: 20px;
-            background: var(--bauhaus-blue);
-            border: 2px solid var(--bauhaus-black);
+        .emblem .shape-square {
+            width: 18px;
+            height: 18px;
+            background: var(--accent-blue);
         }
 
-        .title-text h1 {
-            font-size: 28px;
+        .title-block h1 {
+            font-size: 26px;
             font-weight: 900;
-            letter-spacing: -1px;
+            letter-spacing: -0.5px;
             text-transform: uppercase;
         }
-
-        .title-text p {
-            font-size: 13px;
-            color: #4b5563;
-            font-weight: 700;
-            letter-spacing: 0.5px;
+        .title-block p {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 600;
             text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 2px;
         }
 
-        .network-tag {
-            background: var(--bauhaus-yellow);
-            border: 2px solid var(--bauhaus-black);
-            box-shadow: var(--shadow-hard-sm);
+        .status-badge {
+            background: var(--surface-2);
+            border: 1px solid var(--border-strong);
             padding: 8px 16px;
             font-size: 12px;
-            font-weight: 900;
+            font-weight: 700;
+            color: var(--text-primary);
             text-transform: uppercase;
             letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .status-badge::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: var(--accent-emerald);
+            box-shadow: 0 0 10px var(--accent-emerald);
         }
 
-        /* Metric Grid */
-        .grid-metrics {
+        /* Metric Tiles */
+        .metrics-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 18px;
-            margin-bottom: 24px;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 28px;
         }
 
-        .card-metric {
-            background: var(--bauhaus-white);
-            border: 3px solid var(--bauhaus-black);
-            box-shadow: var(--shadow-hard-sm);
-            padding: 16px 20px;
+        @media (max-width: 1024px) {
+            .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+            .workspace-grid { grid-template-columns: 1fr !important; }
+        }
+
+        .metric-tile {
+            background: var(--surface-1);
+            border: 1px solid var(--border-subtle);
+            box-shadow: var(--shadow-border);
+            padding: 20px 24px;
+            transition: all 0.2s ease;
             position: relative;
-            overflow: hidden;
-            transition: transform 0.15s ease, box-shadow 0.15s ease;
         }
-        .card-metric:hover {
-            transform: translate(-2px, -2px);
-            box-shadow: var(--shadow-hard);
+        .metric-tile:hover {
+            border-color: var(--border-strong);
+            transform: translateY(-2px);
         }
-
-        .card-metric.red { border-top: 8px solid var(--bauhaus-red); }
-        .card-metric.yellow { border-top: 8px solid var(--bauhaus-yellow); }
-        .card-metric.blue { border-top: 8px solid var(--bauhaus-blue); }
-        .card-metric.green { border-top: 8px solid var(--bauhaus-green); }
-
-        .card-metric .lbl {
-            font-size: 11px;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: #4b5563;
-        }
-        .card-metric .num {
-            font-size: 32px;
-            font-weight: 900;
-            line-height: 1.1;
-            margin: 6px 0;
-            font-family: 'JetBrains Mono', monospace;
-        }
-        .card-metric .sub {
+        .metric-tile .label {
             font-size: 11px;
             font-weight: 700;
             text-transform: uppercase;
-            color: #6b7280;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
+        }
+        .metric-tile .value {
+            font-size: 30px;
+            font-weight: 900;
+            margin: 8px 0 4px 0;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-primary);
+        }
+        .metric-tile .subtext {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-weight: 600;
+            text-transform: uppercase;
         }
 
-        /* Main Workspace Grid */
+        /* Main Workspace Layout */
         .workspace-grid {
             display: grid;
-            grid-template-columns: 1.1fr 1.3fr;
-            gap: 24px;
+            grid-template-columns: 1.15fr 1.25fr;
+            gap: 28px;
         }
 
-        .panel-box {
-            background: var(--bauhaus-white);
-            border: 3px solid var(--bauhaus-black);
-            box-shadow: var(--shadow-hard);
-            padding: 24px;
+        .panel {
+            background: var(--surface-1);
+            border: 1px solid var(--border-subtle);
+            box-shadow: var(--shadow-border);
+            padding: 28px;
+            display: flex;
+            flex-direction: column;
         }
 
-        .panel-title-bar {
-            border-bottom: 3px solid var(--bauhaus-black);
-            padding-bottom: 12px;
-            margin-bottom: 18px;
+        .panel-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            padding-bottom: 16px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border-subtle);
         }
-
-        .panel-title-bar h2 {
-            font-size: 18px;
-            font-weight: 900;
+        .panel-title {
+            font-size: 16px;
+            font-weight: 800;
             text-transform: uppercase;
-            letter-spacing: -0.5px;
+            letter-spacing: 0.5px;
             display: flex;
             align-items: center;
             gap: 10px;
         }
-
-        .panel-title-bar .tag {
-            background: var(--bauhaus-black);
-            color: var(--bauhaus-white);
-            padding: 4px 10px;
-            font-size: 11px;
-            font-weight: 800;
-            text-transform: uppercase;
-        }
-
-        /* Editor Area */
-        textarea.bauhaus-input {
-            width: 100%;
-            height: 240px;
-            border: 2px solid var(--bauhaus-black);
-            background: #FAFAF7;
-            padding: 14px;
-            font-size: 13px;
-            font-weight: 500;
-            color: var(--bauhaus-black);
-            outline: none;
-            resize: vertical;
-            margin-bottom: 16px;
-        }
-        textarea.bauhaus-input:focus {
-            background: var(--bauhaus-white);
-            border-color: var(--bauhaus-blue);
-        }
-
-        /* Action Buttons */
-        .btn-bauhaus {
-            background: var(--bauhaus-red);
-            color: var(--bauhaus-white);
-            border: 3px solid var(--bauhaus-black);
-            box-shadow: var(--shadow-hard-sm);
-            font-family: 'Space Grotesk', sans-serif;
-            font-size: 14px;
-            font-weight: 900;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            padding: 14px 24px;
-            cursor: pointer;
-            transition: all 0.1s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .btn-bauhaus:hover {
-            background: #d00000;
-            transform: translate(-2px, -2px);
-            box-shadow: var(--shadow-hard);
-        }
-        .btn-bauhaus:active {
-            transform: translate(2px, 2px);
-            box-shadow: 1px 1px 0px var(--bauhaus-black);
-        }
-        .btn-bauhaus.yellow {
-            background: var(--bauhaus-yellow);
-            color: var(--bauhaus-black);
-        }
-        .btn-bauhaus.blue {
-            background: var(--bauhaus-blue);
-            color: var(--bauhaus-white);
-        }
-        .btn-bauhaus:disabled {
-            background: #9ca3af !important;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: var(--shadow-hard-sm);
-        }
-
-        /* Tables */
-        .bauhaus-table {
-            width: 100%;
-            border-collapse: collapse;
-            border: 2px solid var(--bauhaus-black);
-            margin-bottom: 20px;
-        }
-        .bauhaus-table th {
-            background: var(--bauhaus-black);
-            color: var(--bauhaus-white);
-            font-size: 11px;
-            font-weight: 900;
+        .panel-tag {
+            background: var(--surface-3);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+            font-size: 10px;
+            font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 1px;
-            padding: 10px 14px;
-            text-align: left;
-        }
-        .bauhaus-table td {
-            padding: 12px 14px;
-            border-bottom: 2px solid var(--bauhaus-black);
-            font-size: 13px;
-            font-weight: 600;
-            background: var(--bauhaus-white);
-        }
-        .bauhaus-table tr:last-child td {
-            border-bottom: none;
+            padding: 4px 10px;
         }
 
-        /* Status Flags */
-        .flag {
-            display: inline-block;
-            padding: 4px 8px;
+        /* Preset selector */
+        .presets-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .btn-preset {
+            background: var(--surface-2);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
             font-size: 11px;
-            font-weight: 900;
+            font-weight: 700;
             text-transform: uppercase;
-            border: 1.5px solid var(--bauhaus-black);
+            padding: 6px 12px;
+            cursor: pointer;
+            transition: all 0.15s ease;
         }
-        .flag-red { background: var(--bauhaus-red); color: var(--bauhaus-white); }
-        .flag-yellow { background: var(--bauhaus-yellow); color: var(--bauhaus-black); }
-        .flag-blue { background: var(--bauhaus-blue); color: var(--bauhaus-white); }
-        .flag-green { background: var(--bauhaus-green); color: var(--bauhaus-white); }
-        .flag-black { background: var(--bauhaus-black); color: var(--bauhaus-white); }
+        .btn-preset:hover, .btn-preset.active {
+            background: var(--surface-3);
+            color: var(--text-primary);
+            border-color: var(--border-strong);
+        }
 
-        /* Step Timeline */
-        .timeline-box {
+        /* Editor Input */
+        textarea.code-editor {
+            width: 100%;
+            height: 250px;
+            background: #050507;
+            border: 1px solid var(--border-subtle);
+            color: #E4E4E7;
+            padding: 16px;
+            font-size: 13px;
+            line-height: 1.6;
+            outline: none;
+            resize: vertical;
+            margin-bottom: 20px;
+            transition: border-color 0.2s ease;
+        }
+        textarea.code-editor:focus {
+            border-color: var(--accent-blue);
+        }
+
+        /* Primary Action Buttons */
+        .btn-primary {
+            background: var(--text-primary);
+            color: var(--bg-black);
+            border: 1px solid var(--text-primary);
+            box-shadow: 3px 3px 0px var(--border-strong);
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 13px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 14px 24px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .btn-primary:hover {
+            background: #E4E4E7;
+            transform: translate(-1px, -1px);
+            box-shadow: 4px 4px 0px var(--border-strong);
+        }
+        .btn-primary:active {
+            transform: translate(1px, 1px);
+            box-shadow: 1px 1px 0px var(--border-strong);
+        }
+        .btn-primary:disabled {
+            background: var(--surface-3) !important;
+            color: var(--text-muted) !important;
+            border-color: var(--border-subtle) !important;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-secondary {
+            background: var(--surface-2);
+            color: var(--text-primary);
+            border: 1px solid var(--border-subtle);
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 10px 18px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .btn-secondary:hover {
+            background: var(--surface-3);
+            border-color: var(--border-strong);
+        }
+
+        /* Minimal Tables */
+        .clean-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            margin-bottom: 24px;
+        }
+        .clean-table th {
+            text-align: left;
+            padding: 10px 14px;
+            background: var(--surface-2);
+            color: var(--text-secondary);
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+        .clean-table td {
+            padding: 14px;
+            border-bottom: 1px solid var(--border-subtle);
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+        .clean-table tr:hover td {
+            background: rgba(255, 255, 255, 0.015);
+        }
+
+        /* Minimalist Indicators */
+        .tag-pill {
+            display: inline-block;
+            padding: 3px 8px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border: 1px solid transparent;
+        }
+        .tag-emerald { background: rgba(16, 185, 129, 0.1); color: var(--accent-emerald); border-color: rgba(16, 185, 129, 0.3); }
+        .tag-crimson { background: rgba(239, 68, 68, 0.1); color: var(--accent-crimson); border-color: rgba(239, 68, 68, 0.3); }
+        .tag-yellow { background: rgba(245, 158, 11, 0.1); color: var(--accent-yellow); border-color: rgba(245, 158, 11, 0.3); }
+        .tag-blue { background: rgba(59, 130, 246, 0.1); color: var(--accent-blue); border-color: rgba(59, 130, 246, 0.3); }
+
+        /* Real-Time Trace Log */
+        .trace-stream {
             display: flex;
             flex-direction: column;
             gap: 12px;
         }
-        .step-card {
-            border: 2px solid var(--bauhaus-black);
-            background: var(--bauhaus-bg);
+        .trace-card {
+            background: var(--surface-2);
+            border: 1px solid var(--border-subtle);
             padding: 14px 18px;
-            position: relative;
+            border-left: 4px solid var(--border-strong);
+            font-size: 13px;
+            transition: border-color 0.2s;
         }
-        .step-card.step-red { border-left: 8px solid var(--bauhaus-red); }
-        .step-card.step-green { border-left: 8px solid var(--bauhaus-green); }
-        .step-card.step-blue { border-left: 8px solid var(--bauhaus-blue); }
-        .step-card.step-yellow { border-left: 8px solid var(--bauhaus-yellow); }
+        .trace-card.pass { border-left-color: var(--accent-emerald); }
+        .trace-card.reject { border-left-color: var(--accent-crimson); }
+        .trace-card.breaker { border-left-color: var(--accent-yellow); }
+        .trace-card.info { border-left-color: var(--accent-blue); }
 
-        .step-header {
+        .trace-header {
+            font-weight: 800;
+            text-transform: uppercase;
+            font-size: 12px;
+            margin-bottom: 4px;
             display: flex;
             justify-content: space-between;
-            font-size: 13px;
-            font-weight: 900;
-            text-transform: uppercase;
-            margin-bottom: 4px;
         }
-        .step-body {
+        .trace-desc {
+            color: var(--text-secondary);
             font-size: 12px;
-            font-weight: 600;
-            color: #374151;
+            line-height: 1.5;
         }
     </style>
 </head>
 <body>
 
-    <!-- Top Masthead -->
+    <!-- Header -->
     <header class="masthead">
         <div class="brand">
-            <div class="bauhaus-badge">
+            <div class="emblem">
                 <div class="shape-circle"></div>
                 <div class="shape-triangle"></div>
                 <div class="shape-square"></div>
             </div>
-            <div class="title-text">
+            <div class="title-block">
                 <h1>AEGIS // C-TO-SAFE-RUST</h1>
-                <p>Bittensor Global Hackathon • Adversarial Fuzzing Subnet</p>
+                <p>Bittensor Subnet • Adversarial Breakers • Formal Hard Gates</p>
             </div>
         </div>
-        <div class="network-tag">● SUBTENSOR SYNCHRONIZED</div>
+        <div class="status-badge" id="net-badge">Consensus Active • NetUID 1</div>
     </header>
 
-    <!-- Metrics Strip -->
-    <section class="grid-metrics">
-        <div class="card-metric yellow">
-            <div class="lbl">Current Block / NetUID</div>
-            <div class="num" id="block-num">#1,012</div>
-            <div class="sub">Localnet Consensus</div>
+    <!-- Metrics -->
+    <section class="metrics-grid">
+        <div class="metric-tile">
+            <div class="label">Current Block</div>
+            <div class="value" id="val-block">#1,015</div>
+            <div class="subtext">Subtensor Height</div>
         </div>
-        <div class="card-metric red">
-            <div class="lbl">Hard Gate Gatekeeping</div>
-            <div class="num">&lt; 1ms</div>
-            <div class="sub">100% Slashes Unsafe / Libc</div>
+        <div class="metric-tile">
+            <div class="label">Static Gate Speed</div>
+            <div class="value" style="color: var(--accent-crimson);">&lt; 0.05ms</div>
+            <div class="subtext">Zero-Tolerance Slashes</div>
         </div>
-        <div class="card-metric green">
-            <div class="lbl">Top Translator Emission</div>
-            <div class="num" id="top-emission">1.2000</div>
-            <div class="sub">(PassRate)² × SpeedBonus</div>
+        <div class="metric-tile">
+            <div class="label">Top Translator Score</div>
+            <div class="value" style="color: var(--accent-emerald);" id="val-top">1.2000</div>
+            <div class="subtext">PassRate² × SpeedBonus</div>
         </div>
-        <div class="card-metric blue">
-            <div class="lbl">Breaker Bounty Pool</div>
-            <div class="num">0.5000</div>
-            <div class="sub">TAO per Caught Divergence</div>
+        <div class="metric-tile">
+            <div class="label">Breaker Bounty Pool</div>
+            <div class="value" style="color: var(--accent-yellow);">0.5000</div>
+            <div class="subtext">TAO Per Proven Flaw</div>
         </div>
     </section>
 
-    <!-- Main Workspace -->
+    <!-- Workspace -->
     <main class="workspace-grid">
         
-        <!-- Left: Input & Static Gate Panel -->
-        <section class="panel-box">
-            <div class="panel-title-bar">
-                <h2>■ Legacy C Ingestion</h2>
-                <span class="tag">Challenge Engine</span>
+        <!-- Left: Input & Static Analysis -->
+        <section class="panel">
+            <div class="panel-header">
+                <div class="panel-title">
+                    <span style="color: var(--accent-yellow);">■</span> C Source Ingestion
+                </div>
+                <span class="panel-tag">Input Stream</span>
             </div>
-            
-            <textarea id="c-source" class="bauhaus-input mono"></textarea>
-            
-            <button id="exec-btn" class="btn-bauhaus" onclick="executeValidationRound()">
-                ► DISPATCH VALIDATION CHALLENGE
+
+            <div class="presets-row">
+                <button class="btn-preset active" onclick="setPreset('string_rev')">String Reverser</button>
+                <button class="btn-preset" onclick="setPreset('math_fib')">Matrix Math</button>
+                <button class="btn-preset" onclick="setPreset('buffer_parse')">Buffer Decoder</button>
+            </div>
+
+            <textarea id="c-editor" class="code-editor mono" spellcheck="false"></textarea>
+
+            <button id="dispatch-btn" class="btn-primary" onclick="triggerValidationRound()">
+                ► DISPATCH CROSS-MINER ROUND
             </button>
 
-            <!-- Hard Gate Interactive Sandbox -->
-            <div style="margin-top: 32px; border-top: 2px solid var(--bauhaus-black); padding-top: 20px;">
-                <div class="panel-title-bar" style="margin-bottom: 12px; border-bottom: none; padding-bottom: 0;">
-                    <h2>▲ Static Gate Tester</h2>
-                    <span class="flag flag-yellow">&lt;1MS HARD STOP</span>
+            <!-- Quick Static Gate Checker -->
+            <div style="margin-top: 36px; padding-top: 24px; border-top: 1px solid var(--border-subtle);">
+                <div class="panel-header" style="padding-bottom: 12px; margin-bottom: 16px;">
+                    <div class="panel-title" style="font-size: 14px;">
+                        <span style="color: var(--accent-crimson);">▲</span> Instant Hard Gate Audit
+                    </div>
+                    <span class="panel-tag">Static Linter</span>
                 </div>
-                <input id="rust-input" type="text" class="mono" 
-                       placeholder='e.g. pub fn test() { unsafe { } }'
-                       style="width: 100%; padding: 12px; border: 2px solid var(--bauhaus-black); font-size: 13px; margin-bottom: 10px; outline: none;">
-                <button class="btn-bauhaus blue" style="padding: 10px 18px; font-size: 12px;" onclick="testHardGate()">
-                    VERIFY SAFETY CONSTRAINTS
-                </button>
-                <div id="gate-output" style="margin-top: 12px;"></div>
+                
+                <input id="quick-gate-input" type="text" class="mono"
+                       placeholder='Enter Rust snippet, e.g. pub fn pwn() { unsafe { } }'
+                       style="width: 100%; padding: 12px 14px; background: #050507; border: 1px solid var(--border-subtle); color: #E4E4E7; font-size: 12px; margin-bottom: 12px; outline: none;">
+                
+                <button class="btn-secondary" onclick="checkGateSnippet()">Audit Rust Code</button>
+                <div id="gate-result-box" style="margin-top: 14px;"></div>
             </div>
         </section>
 
-        <!-- Right: Metagraph Leaderboard & Live Trace -->
-        <section class="panel-box">
-            <div class="panel-title-bar">
-                <h2>● Active Metagraph</h2>
-                <span class="tag">Live Scoring</span>
+        <!-- Right: Leaderboard & Execution Trace -->
+        <section class="panel">
+            <div class="panel-header">
+                <div class="panel-title">
+                    <span style="color: var(--accent-emerald);">●</span> Metagraph Weights &amp; Status
+                </div>
+                <span class="panel-tag">Live Consensus</span>
             </div>
 
-            <table class="bauhaus-table">
+            <table class="clean-table">
                 <thead>
                     <tr>
-                        <th>UID / Miner</th>
+                        <th>Miner</th>
                         <th>Role</th>
                         <th>Status</th>
                         <th>Score</th>
-                        <th>Decision</th>
+                        <th>Emission</th>
                     </tr>
                 </thead>
-                <tbody id="leaderboard-body">
-                    <tr><td colspan="5" style="text-align: center;">Querying subnet state...</td></tr>
+                <tbody id="leaderboard-table">
+                    <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Synchronizing...</td></tr>
                 </tbody>
             </table>
 
-            <!-- Real-Time Trace -->
-            <div class="panel-title-bar" style="margin-top: 28px; margin-bottom: 14px;">
-                <h2>◆ Execution Trace</h2>
-                <span class="flag flag-black">SANDBOX LOGS</span>
+            <div class="panel-header" style="margin-top: 16px; margin-bottom: 16px;">
+                <div class="panel-title" style="font-size: 14px;">
+                    <span style="color: var(--accent-blue);">◆</span> Round Execution Stream
+                </div>
+                <span class="panel-tag">Differential Audit</span>
             </div>
 
-            <div id="trace-container" class="timeline-box">
-                <div class="step-card step-blue">
-                    <div class="step-header">Ready for Consensus</div>
-                    <div class="step-body">Click "DISPATCH VALIDATION CHALLENGE" to initiate cross-miner differential fuzzing.</div>
+            <div id="trace-stream" class="trace-stream">
+                <div class="trace-card info">
+                    <div class="trace-header">Aegis Consensus Engine Idle</div>
+                    <div class="trace-desc">Click "DISPATCH CROSS-MINER ROUND" to challenge registered translators and breakers.</div>
                 </div>
             </div>
         </section>
@@ -696,52 +763,133 @@ def dashboard():
     </main>
 
     <script>
-        async function loadInitialData() {
+        const PRESETS = {
+            string_rev: `/**
+ * Robust In-Place C String Reverser & Parser
+ * Benchmark legacy module with boundary edge-cases.
+ */
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+void reverse_string(char *str) {
+    if (str == NULL) return;
+    int i = 0, j = (int)strlen(str) - 1;
+    while (i < j) {
+        char tmp = str[i];
+        str[i] = str[j];
+        str[j] = tmp;
+        i++; j--;
+    }
+}
+
+int main(int argc, char *argv[]) {
+    if (argc < 2) return 0;
+    char *buf = strdup(argv[1]);
+    reverse_string(buf);
+    printf("%s", buf);
+    free(buf);
+    return 0;
+}`,
+            math_fib: `/**
+ * Bounded Fast Integer Transform
+ */
+#include <stdio.h>
+#include <stdlib.h>
+
+long long fast_compute(long long n) {
+    if (n <= 0) return 0;
+    if (n == 1) return 1;
+    long long a = 0, b = 1, c = 0;
+    for (int i = 2; i <= n; i++) {
+        c = a + b;
+        a = b;
+        b = c;
+    }
+    return b;
+}
+
+int main(int argc, char *argv[]) {
+    if (argc < 2) return 0;
+    long long n = atoll(argv[1]);
+    printf("%lld", fast_compute(n));
+    return 0;
+}`,
+            buffer_parse: `/**
+ * Hex Stream Decoder with Null Terminator Sanitizer
+ */
+#include <stdio.h>
+#include <string.h>
+
+void parse_stream(const char *in, char *out) {
+    int o = 0;
+    for (int i = 0; in[i] != '\\0'; i++) {
+        if (in[i] >= '0' && in[i] <= '9') {
+            out[o++] = in[i];
+        }
+    }
+    out[o] = '\\0';
+}
+
+int main(int argc, char *argv[]) {
+    if (argc < 2) return 0;
+    char out[1024];
+    parse_stream(argv[1], out);
+    printf("%s", out);
+    return 0;
+}`
+        };
+
+        function setPreset(name) {
+            document.querySelectorAll('.btn-preset').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById('c-editor').value = PRESETS[name];
+        }
+
+        async function initPage() {
+            document.getElementById('c-editor').value = PRESETS['string_rev'];
+            await refreshLeaderboard();
+        }
+
+        async function refreshLeaderboard() {
             try {
-                const res = await fetch('/api/dataset');
+                const res = await fetch('/api/leaderboard');
                 const data = await res.json();
-                document.getElementById('c-source').value = data.sample_c_code;
-                fetchLeaderboard();
+                const tbody = document.getElementById('leaderboard-table');
+                tbody.innerHTML = '';
+
+                data.leaderboard.forEach(m => {
+                    let badgeClass = 'tag-emerald';
+                    if (m.decision.includes('SLASHED')) badgeClass = 'tag-crimson';
+                    else if (m.decision.includes('BOUNTY')) badgeClass = 'tag-yellow';
+                    else if (m.decision.includes('LOW')) badgeClass = 'tag-blue';
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td><strong>${m.hotkey}</strong></td>
+                        <td style="color: var(--text-secondary);">${m.role}</td>
+                        <td><span class="tag-pill ${badgeClass}">${m.status}</span></td>
+                        <td class="mono" style="color: var(--text-primary); font-weight: 700;">${m.avg_score.toFixed(4)}</td>
+                        <td><span class="tag-pill ${badgeClass}">${m.decision}</span></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
             } catch (e) {
                 console.error(e);
             }
         }
 
-        async function fetchLeaderboard() {
-            const res = await fetch('/api/leaderboard');
-            const data = await res.json();
-            const tbody = document.getElementById('leaderboard-body');
-            tbody.innerHTML = '';
-            
-            data.leaderboard.forEach(m => {
-                let flagClass = 'flag-green';
-                if (m.decision.includes('SLASHED')) flagClass = 'flag-red';
-                else if (m.decision.includes('BOUNTY')) flagClass = 'flag-blue';
-                else if (m.decision.includes('LOW')) flagClass = 'flag-yellow';
-
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td><strong>#${m.uid}</strong> ${m.hotkey}</td>
-                    <td>${m.role}</td>
-                    <td><span class="flag ${flagClass}">${m.status}</span></td>
-                    <td class="mono" style="font-size: 14px; font-weight: 800;">${m.avg_score.toFixed(4)}</td>
-                    <td><span class="flag ${flagClass}">${m.decision}</span></td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-
-        async function executeValidationRound() {
-            const btn = document.getElementById('exec-btn');
-            const cCode = document.getElementById('c-source').value;
+        async function triggerValidationRound() {
+            const btn = document.getElementById('dispatch-btn');
+            const cCode = document.getElementById('c-editor').value;
             btn.disabled = true;
-            btn.innerText = '● ORCHESTRATING ROUND...';
+            btn.innerText = '● DISPATCHING &amp; AUDITING...';
 
-            const container = document.getElementById('trace-container');
-            container.innerHTML = `
-                <div class="step-card step-yellow">
-                    <div class="step-header">1. Ingesting C Benchmark &amp; Querying Miners</div>
-                    <div class="step-body">Dispatched TranslationSynapse to all registered translator axons.</div>
+            const stream = document.getElementById('trace-stream');
+            stream.innerHTML = `
+                <div class="trace-card info">
+                    <div class="trace-header">1. Ingesting Source &amp; Querying Neurons</div>
+                    <div class="trace-desc">Broadcasted TranslationSynapse across subnet axons. Awaiting Safe Rust candidates.</div>
                 </div>
             `;
 
@@ -751,64 +899,74 @@ def dashboard():
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ c_code: cCode, num_tests: 50 })
                 });
-                const result = await res.json();
-                
+                const data = await res.json();
+
                 let html = '';
-                result.results.forEach(m => {
+                data.results.forEach(m => {
                     if (m.status === 'REJECTED_STATIC_GATE') {
                         html += `
-                            <div class="step-card step-red">
-                                <div class="step-header" style="color: var(--bauhaus-red);">⛔ STATIC GATE REJECT: ${m.hotkey}</div>
-                                <div class="step-body mono">${m.reason} • Score: 0.0000 (Slashed in &lt;1ms)</div>
+                            <div class="trace-card reject">
+                                <div class="trace-header" style="color: var(--accent-crimson);">⛔ STATIC GATE REJECT: ${m.hotkey}</div>
+                                <div class="trace-desc mono">${m.reason} • <strong>Score: 0.0000</strong> (Hard Stop &lt;0.05ms)</div>
                             </div>
                         `;
                     } else if (m.role === 'breaker') {
                         html += `
-                            <div class="step-card step-blue">
-                                <div class="step-header" style="color: var(--bauhaus-blue);">💥 ADVERSARIAL BREAKER: ${m.hotkey}</div>
-                                <div class="step-body mono">Injected edge-case boundary inputs • Caught weak miner divergences • Awarded ${m.score} TAO bounty</div>
+                            <div class="trace-card breaker">
+                                <div class="trace-header" style="color: var(--accent-yellow);">💥 ADVERSARIAL BREAKER: ${m.hotkey}</div>
+                                <div class="trace-desc mono">Generated boundary edge-cases • Provoked weak miner logic divergence • <strong>Bounty: +${m.score} TAO</strong></div>
                             </div>
                         `;
                     } else {
                         html += `
-                            <div class="step-card step-green">
-                                <div class="step-header" style="color: var(--bauhaus-green);">✅ COMPILATION &amp; DIFF FUZZ: ${m.hotkey}</div>
-                                <div class="step-body mono">Pass Rate: ${(m.pass_rate * 100).toFixed(1)}% • Final Score: ${m.score.toFixed(4)} (${m.breakdown.base_score} × ${m.breakdown.safety_penalty} × ${m.breakdown.speed_bonus})</div>
+                            <div class="trace-card pass">
+                                <div class="trace-header" style="color: var(--accent-emerald);">✅ SAFE RUST VERIFIED: ${m.hotkey}</div>
+                                <div class="trace-desc mono">Pass Rate: ${(m.pass_rate * 100).toFixed(1)}% • Final Score: <strong>${m.score.toFixed(4)}</strong> (Base: ${m.breakdown.base_score} × SpeedBonus: ${m.breakdown.speed_bonus})</div>
                             </div>
                         `;
                     }
                 });
 
-                container.innerHTML = html;
-                fetchLeaderboard();
-                
+                stream.innerHTML = html;
+                await refreshLeaderboard();
+
                 const stat = await (await fetch('/api/status')).json();
-                document.getElementById('block-num').innerText = '#' + stat.current_block;
-            } catch (e) {
-                container.innerHTML = `<div class="step-card step-red"><div class="step-header">Execution Error</div><div class="step-body">${e.message}</div></div>`;
+                document.getElementById('val-block').innerText = '#' + stat.current_block;
+            } catch (err) {
+                stream.innerHTML = `<div class="trace-card reject"><div class="trace-header">Error</div><div class="trace-desc">${err.message}</div></div>`;
             } finally {
                 btn.disabled = false;
-                btn.innerText = '► DISPATCH VALIDATION CHALLENGE';
+                btn.innerText = '► DISPATCH CROSS-MINER ROUND';
             }
         }
 
-        async function testHardGate() {
-            const input = document.getElementById('rust-input').value;
+        async function checkGateSnippet() {
+            const input = document.getElementById('quick-gate-input').value;
             const res = await fetch('/api/check-gate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ rust_code: input })
             });
             const d = await res.json();
-            const out = document.getElementById('gate-output');
+            const out = document.getElementById('gate-result-box');
             if (d.passed) {
-                out.innerHTML = `<div class="step-card step-green"><div class="step-header" style="color: var(--bauhaus-green);">[APPROVED] 100% SAFE RUST</div><div class="step-body mono">Passed static analysis in ${(d.execution_time_seconds * 1000).toFixed(3)}ms! Theoretical score: ${d.score_if_passed}</div></div>`;
+                out.innerHTML = `
+                    <div class="trace-card pass">
+                        <div class="trace-header" style="color: var(--accent-emerald);">[APPROVED] 100% SAFE RUST</div>
+                        <div class="trace-desc mono">Passed all 6 AST/static gates in ${(d.execution_time_seconds * 1000).toFixed(3)}ms. Zero unsafe blocks.</div>
+                    </div>
+                `;
             } else {
-                out.innerHTML = `<div class="step-card step-red"><div class="step-header" style="color: var(--bauhaus-red);">[HARD STOP] REJECTED</div><div class="step-body mono">${d.reason} (Score: 0.0)</div></div>`;
+                out.innerHTML = `
+                    <div class="trace-card reject">
+                        <div class="trace-header" style="color: var(--accent-crimson);">[REJECTED] ZERO-TOLERANCE HARD GATE</div>
+                        <div class="trace-desc mono">${d.reason} • Final Score: 0.0000</div>
+                    </div>
+                `;
             }
         }
 
-        window.onload = loadInitialData;
+        window.onload = initPage;
     </script>
 </body>
 </html>
