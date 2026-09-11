@@ -1,0 +1,876 @@
+/* ==========================================================================
+   AEGIS SUBNET — CONSTRUCTIVIST BAUHAUS DESIGN SYSTEM
+   "Form Follows Function" // Primary Color Theory // Geometric Purity
+   Palette: Red #D02020 | Blue #1040C0 | Yellow #F0C020 | Black #121212 | Off-White #F0F0F0
+   Typography: 'Outfit' (400, 500, 700, 900) & 'JetBrains Mono'
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;700;900&family=JetBrains+Mono:wght@500;700;800&display=swap');
+
+:root {
+    /* Bauhaus Primaries & Foundations */
+    --bg: #F0F0F0;
+    --fg: #121212;
+    --primary-red: #D02020;
+    --primary-blue: #1040C0;
+    --primary-yellow: #F0C020;
+    --border: #121212;
+    --muted: #E0E0E0;
+    --card-bg: #FFFFFF;
+    --yellow-light: #FFF9C4;
+    
+    /* Typography */
+    --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    /* Border Widths */
+    --border-w: 4px;
+    --border-w-sm: 2px;
+
+    /* Hard Shadows */
+    --shadow-sm: 4px 4px 0px 0px #121212;
+    --shadow-md: 6px 6px 0px 0px #121212;
+    --shadow-lg: 8px 8px 0px 0px #121212;
+    --shadow-xl: 12px 12px 0px 0px #121212;
+}
+
+/* Binary Radius & Reset */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    border-radius: 0; /* Strict constructivist standard: only 0px or 9999px */
+}
+
+body {
+    background-color: var(--bg);
+    background-image: radial-gradient(var(--border) 1.5px, transparent 1.5px);
+    background-size: 24px 24px;
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-weight: 500;
+    line-height: 1.6;
+    min-height: 100vh;
+    padding: 0;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+}
+
+code, pre, .mono {
+    font-family: var(--font-mono);
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 32px 24px 64px 24px;
+}
+
+/* ==========================================================================
+   GEOMETRIC PRIMITIVES & LOGO
+   ========================================================================== */
+.bauhaus-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.shape-circle {
+    width: 22px;
+    height: 22px;
+    background-color: var(--primary-red);
+    border: 2px solid var(--border);
+    border-radius: 9999px !important;
+}
+
+.shape-square {
+    width: 22px;
+    height: 22px;
+    background-color: var(--primary-blue);
+    border: 2px solid var(--border);
+}
+
+.shape-triangle {
+    width: 0;
+    height: 0;
+    border-left: 11px solid transparent;
+    border-right: 11px solid transparent;
+    border-bottom: 22px solid var(--primary-yellow);
+    filter: drop-shadow(0 0 0 2px var(--border));
+}
+
+/* ==========================================================================
+   TOP MASTHEAD / HEADER
+   ========================================================================== */
+.masthead {
+    background: var(--card-bg);
+    border: var(--border-w) solid var(--border);
+    box-shadow: var(--shadow-lg);
+    padding: 24px 32px;
+    margin-bottom: 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    border-top: 8px solid var(--primary-red);
+}
+
+.brand-section {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.brand-titles h1 {
+    font-size: 32px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: -0.04em;
+    line-height: 0.95;
+    color: var(--fg);
+}
+
+.brand-titles p {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--primary-blue);
+    margin-top: 6px;
+}
+
+.header-status {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.status-badge {
+    background: var(--primary-yellow);
+    color: var(--fg);
+    border: 3px solid var(--border);
+    box-shadow: var(--shadow-sm);
+    padding: 8px 18px;
+    font-size: 13px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.status-indicator {
+    width: 10px;
+    height: 10px;
+    background: #00A86B;
+    border: 1.5px solid var(--border);
+    border-radius: 9999px !important;
+}
+
+/* ==========================================================================
+   CONSTRUCTIVIST HERO COMPOSITION (BAUHAUS POSTER PANEL)
+   ========================================================================== */
+.hero-composition {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    border: var(--border-w) solid var(--border);
+    box-shadow: var(--shadow-lg);
+    margin-bottom: 36px;
+    background: var(--card-bg);
+    overflow: hidden;
+}
+
+.hero-left {
+    padding: 48px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    border-right: var(--border-w) solid var(--border);
+    position: relative;
+    background: var(--card-bg);
+}
+
+.hero-tag {
+    display: inline-block;
+    background: var(--fg);
+    color: var(--card-bg);
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    width: fit-content;
+    margin-bottom: 24px;
+}
+
+.hero-headline {
+    font-size: 56px;
+    font-weight: 900;
+    text-transform: uppercase;
+    line-height: 0.92;
+    letter-spacing: -0.04em;
+    color: var(--fg);
+    margin-bottom: 20px;
+}
+
+.hero-headline span.red {
+    color: var(--primary-red);
+}
+
+.hero-headline span.blue {
+    color: var(--primary-blue);
+}
+
+.hero-description {
+    font-size: 17px;
+    font-weight: 500;
+    color: #333;
+    line-height: 1.6;
+    margin-bottom: 28px;
+    max-width: 620px;
+}
+
+.hero-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.hero-pill {
+    padding: 6px 14px;
+    border: 2px solid var(--border);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    background: var(--bg);
+}
+
+.hero-right {
+    background: var(--primary-blue);
+    padding: 40px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+/* Abstract Overlapping Geometry Composition */
+.composition-art {
+    position: relative;
+    width: 260px;
+    height: 260px;
+}
+
+.art-circle {
+    position: absolute;
+    width: 180px;
+    height: 180px;
+    background: var(--primary-red);
+    border: var(--border-w) solid var(--border);
+    border-radius: 9999px !important;
+    top: 10px;
+    left: 10px;
+    box-shadow: 6px 6px 0px 0px var(--border);
+}
+
+.art-square-rot {
+    position: absolute;
+    width: 130px;
+    height: 130px;
+    background: var(--primary-yellow);
+    border: var(--border-w) solid var(--border);
+    transform: rotate(45deg);
+    bottom: 20px;
+    right: 15px;
+    box-shadow: 6px 6px 0px 0px var(--border);
+}
+
+.art-center-square {
+    position: absolute;
+    width: 90px;
+    height: 90px;
+    background: var(--card-bg);
+    border: var(--border-w) solid var(--border);
+    top: 85px;
+    left: 85px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 4px 4px 0px 0px var(--border);
+}
+
+.art-center-triangle {
+    width: 0;
+    height: 0;
+    border-left: 20px solid transparent;
+    border-right: 20px solid transparent;
+    border-bottom: 40px solid var(--fg);
+}
+
+.composition-caption {
+    margin-top: 24px;
+    background: var(--card-bg);
+    border: 3px solid var(--border);
+    box-shadow: var(--shadow-sm);
+    padding: 8px 18px;
+    font-size: 13px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--fg);
+}
+
+/* ==========================================================================
+   COLOR-BLOCKED METRIC DECK
+   ========================================================================== */
+.metric-deck {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+    margin-bottom: 36px;
+}
+
+.metric-card {
+    border: var(--border-w) solid var(--border);
+    box-shadow: var(--shadow-lg);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 160px;
+    position: relative;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.metric-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-xl);
+}
+
+.metric-card-yellow {
+    background: var(--primary-yellow);
+    color: var(--fg);
+}
+
+.metric-card-blue {
+    background: var(--primary-blue);
+    color: #FFFFFF;
+}
+
+.metric-card-red {
+    background: var(--primary-red);
+    color: #FFFFFF;
+}
+
+.metric-card-black {
+    background: var(--fg);
+    color: #FFFFFF;
+}
+
+.metric-corner-badge {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 14px;
+    height: 14px;
+    border: 2px solid currentColor;
+}
+
+.metric-corner-badge.circle {
+    border-radius: 9999px !important;
+}
+
+.metric-corner-badge.rotated {
+    transform: rotate(45deg);
+}
+
+.metric-header {
+    font-size: 12px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    opacity: 0.9;
+}
+
+.metric-value {
+    font-family: var(--font-mono);
+    font-size: 38px;
+    font-weight: 800;
+    line-height: 1;
+    margin: 12px 0 4px 0;
+}
+
+.metric-sub {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    opacity: 0.85;
+}
+
+/* ==========================================================================
+   TWO-COLUMN WORKSPACE: CONTROLS & LEADERBOARD
+   ========================================================================== */
+.workspace-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+    margin-bottom: 36px;
+}
+
+.bauhaus-panel {
+    background: var(--card-bg);
+    border: var(--border-w) solid var(--border);
+    box-shadow: var(--shadow-lg);
+    display: flex;
+    flex-direction: column;
+}
+
+.panel-header {
+    background: var(--fg);
+    color: var(--card-bg);
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: var(--border-w) solid var(--border);
+}
+
+.panel-header.red {
+    background: var(--primary-red);
+}
+
+.panel-header.blue {
+    background: var(--primary-blue);
+}
+
+.panel-header.yellow {
+    background: var(--primary-yellow);
+    color: var(--fg);
+}
+
+.panel-title {
+    font-size: 18px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.panel-badge {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 8px;
+    background: var(--card-bg);
+    color: var(--fg);
+    border: 2px solid var(--border);
+}
+
+.panel-body {
+    padding: 28px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+/* ==========================================================================
+   MECHANICAL BUTTONS
+   ========================================================================== */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 14px 24px;
+    border: 3px solid var(--border);
+    box-shadow: var(--shadow-sm);
+    cursor: pointer;
+    transition: background-color 0.15s ease, transform 0.1s ease, box-shadow 0.1s ease;
+    user-select: none;
+    text-decoration: none;
+}
+
+.btn:active {
+    transform: translate(2px, 2px);
+    box-shadow: none !important;
+}
+
+.btn-primary-red {
+    background-color: var(--primary-red);
+    color: #FFFFFF;
+}
+.btn-primary-red:hover {
+    background-color: #B51818;
+}
+
+.btn-primary-blue {
+    background-color: var(--primary-blue);
+    color: #FFFFFF;
+}
+.btn-primary-blue:hover {
+    background-color: #0A329E;
+}
+
+.btn-primary-yellow {
+    background-color: var(--primary-yellow);
+    color: var(--fg);
+}
+.btn-primary-yellow:hover {
+    background-color: #D6A810;
+}
+
+.btn-outline {
+    background-color: #FFFFFF;
+    color: var(--fg);
+}
+.btn-outline:hover {
+    background-color: var(--muted);
+}
+
+.btn-block {
+    width: 100%;
+}
+
+/* ==========================================================================
+   TASK SELECTOR & INPUTS
+   ========================================================================== */
+.control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.control-label {
+    font-size: 12px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--fg);
+}
+
+.bauhaus-select, .bauhaus-textarea {
+    width: 100%;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 12px 16px;
+    background: #FFFFFF;
+    border: 3px solid var(--border);
+    box-shadow: var(--shadow-sm);
+    color: var(--fg);
+    outline: none;
+}
+
+.bauhaus-select:focus, .bauhaus-textarea:focus {
+    background: var(--yellow-light);
+    border-color: var(--primary-blue);
+}
+
+.bauhaus-textarea {
+    min-height: 110px;
+    resize: vertical;
+}
+
+/* ==========================================================================
+   LEADERBOARD CONSTRUCTIVIST TABLE
+   ========================================================================== */
+.table-wrapper {
+    overflow-x: auto;
+    border: 3px solid var(--border);
+    box-shadow: var(--shadow-sm);
+}
+
+.bauhaus-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+    background: #FFFFFF;
+}
+
+.bauhaus-table th {
+    background: var(--fg);
+    color: #FFFFFF;
+    font-size: 12px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 12px 14px;
+    border-right: 2px solid #333;
+}
+
+.bauhaus-table td {
+    padding: 14px;
+    border-bottom: 2px solid var(--border);
+    border-right: 2px solid var(--border);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.bauhaus-table tr:last-child td {
+    border-bottom: none;
+}
+
+.bauhaus-table tr:hover td {
+    background-color: var(--yellow-light);
+}
+
+.pill-status {
+    display: inline-block;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border: 2px solid var(--border);
+}
+
+.pill-strong {
+    background: var(--primary-blue);
+    color: #FFFFFF;
+}
+
+.pill-active {
+    background: var(--primary-yellow);
+    color: var(--fg);
+}
+
+.pill-zero {
+    background: var(--primary-red);
+    color: #FFFFFF;
+}
+
+/* ==========================================================================
+   BAUHAUS ACCORDION (ANTI-CHEAT & SYSTEM RULES)
+   ========================================================================== */
+.accordion-deck {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 36px;
+}
+
+.accordion-item {
+    background: var(--card-bg);
+    border: var(--border-w) solid var(--border);
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow 0.2s ease;
+}
+
+.accordion-item:hover {
+    box-shadow: var(--shadow-md);
+}
+
+.accordion-header {
+    padding: 18px 24px;
+    background: var(--card-bg);
+    color: var(--fg);
+    font-size: 16px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.accordion-item.active .accordion-header {
+    background: var(--primary-red);
+    color: #FFFFFF;
+}
+
+.accordion-icon {
+    font-size: 20px;
+    font-weight: 900;
+    transition: transform 0.2s ease;
+}
+
+.accordion-item.active .accordion-icon {
+    transform: rotate(180deg);
+}
+
+.accordion-content {
+    display: none;
+    background: var(--yellow-light);
+    color: var(--fg);
+    border-top: var(--border-w) solid var(--border);
+    padding: 24px;
+    font-size: 15px;
+    line-height: 1.6;
+}
+
+.accordion-item.active .accordion-content {
+    display: block;
+}
+
+.accordion-content p {
+    margin-bottom: 12px;
+}
+
+.accordion-content p:last-child {
+    margin-bottom: 0;
+}
+
+.formula-box {
+    background: #FFFFFF;
+    border: 2px solid var(--border);
+    padding: 12px 16px;
+    margin: 12px 0;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+/* ==========================================================================
+   TERMINAL & REAL-TIME AUDIT STREAM
+   ========================================================================== */
+.terminal-panel {
+    background: var(--fg);
+    border: var(--border-w) solid var(--border);
+    box-shadow: var(--shadow-lg);
+    margin-bottom: 36px;
+    display: flex;
+    flex-direction: column;
+}
+
+.terminal-header {
+    background: var(--primary-yellow);
+    color: var(--fg);
+    border-bottom: var(--border-w) solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.terminal-controls {
+    display: flex;
+    gap: 8px;
+}
+
+.term-btn {
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--border);
+}
+.term-btn.red { background: var(--primary-red); border-radius: 9999px !important; }
+.term-btn.blue { background: var(--primary-blue); }
+.term-btn.yellow { 
+    width: 0; 
+    height: 0; 
+    border-left: 7px solid transparent; 
+    border-right: 7px solid transparent; 
+    border-bottom: 14px solid var(--fg); 
+}
+
+.terminal-title {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.terminal-window {
+    background: #101014;
+    color: #00FF66;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 24px;
+    height: 280px;
+    overflow-y: auto;
+}
+
+.terminal-line {
+    margin-bottom: 4px;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.terminal-line .dim { color: #888899; }
+.terminal-line .yellow { color: var(--primary-yellow); }
+.terminal-line .red { color: #FF4D4D; }
+.terminal-line .blue { color: #66B2FF; }
+
+/* ==========================================================================
+   FOOTER
+   ========================================================================== */
+.bauhaus-footer {
+    background: var(--fg);
+    color: #FFFFFF;
+    border-top: var(--border-w) solid var(--border);
+    padding: 40px 24px;
+    text-align: center;
+    margin-top: 48px;
+}
+
+.footer-shapes {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.footer-copy {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #AAAAAA;
+}
+
+/* ==========================================================================
+   RESPONSIVE DESIGN (MOBILE-FIRST PRINCIPLES)
+   ========================================================================== */
+@media (max-width: 1024px) {
+    .hero-composition {
+        grid-template-columns: 1fr;
+    }
+    .hero-left {
+        border-right: none;
+        border-bottom: var(--border-w) solid var(--border);
+    }
+    .metric-deck {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .workspace-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 640px) {
+    :root {
+        --border-w: 3px;
+        --shadow-lg: 5px 5px 0px 0px #121212;
+    }
+    .masthead {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+    .metric-deck {
+        grid-template-columns: 1fr;
+    }
+    .hero-headline {
+        font-size: 38px;
+    }
+    .hero-left {
+        padding: 28px 20px;
+    }
+    .hero-right {
+        padding: 28px 20px;
+    }
+}
