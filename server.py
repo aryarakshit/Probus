@@ -235,279 +235,467 @@ def dashboard():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AEGIS SUBNET // C-to-Safe-Rust Adversarial Network</title>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <title>AEGIS // BITTENSOR C-TO-SAFE-RUST [BAUHAUS EDITION]</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;900&family=JetBrains+Mono:wght@500;700;800&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #07090e;
-            --card-bg: #0f1422;
-            --border: #1e293b;
-            --border-hover: #334155;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --cyan: #00f0ff;
-            --green: #10b981;
-            --red: #f43f5e;
-            --purple: #a855f7;
-            --amber: #f59e0b;
+            --bauhaus-bg: #F4F3EE;
+            --bauhaus-black: #111111;
+            --bauhaus-white: #FFFFFF;
+            --bauhaus-red: #E63946;
+            --bauhaus-blue: #1D4ED8;
+            --bauhaus-yellow: #FFB703;
+            --bauhaus-green: #059669;
+            --bauhaus-gray: #E5E5DF;
+            --shadow-hard: 5px 5px 0px #111111;
+            --shadow-hard-sm: 3px 3px 0px #111111;
+            --shadow-hard-lg: 8px 8px 0px #111111;
         }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            border-radius: 0 !important; /* Strict Bauhaus: Form follows function, no arbitrary rounding */
+        }
+
         body {
-            background-color: var(--bg);
-            color: var(--text-main);
-            font-family: 'Inter', sans-serif;
-            line-height: 1.5;
+            background-color: var(--bauhaus-bg);
+            background-image: radial-gradient(#d1d0c5 1px, transparent 1px);
+            background-size: 20px 20px;
+            color: var(--bauhaus-black);
+            font-family: 'Space Grotesk', -apple-system, sans-serif;
             padding: 24px;
+            line-height: 1.4;
         }
-        code, pre { font-family: 'JetBrains Mono', monospace; }
-        .header {
+
+        code, pre, .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Top Bauhaus Masthead */
+        .masthead {
+            border: 3px solid var(--bauhaus-black);
+            background: var(--bauhaus-white);
+            box-shadow: var(--shadow-hard);
+            padding: 20px 28px;
+            margin-bottom: 24px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding-bottom: 20px;
-            border-bottom: 1px solid var(--border);
+            position: relative;
+        }
+
+        .masthead::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 6px;
+            background: linear-gradient(90deg, var(--bauhaus-red) 0% 33.3%, var(--bauhaus-yellow) 33.3% 66.6%, var(--bauhaus-blue) 66.6% 100%);
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        /* Bauhaus geometric insignia */
+        .bauhaus-badge {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+        .shape-circle {
+            width: 20px;
+            height: 20px;
+            background: var(--bauhaus-red);
+            border: 2px solid var(--bauhaus-black);
+            border-radius: 50% !important; /* Intentional circle primitive */
+        }
+        .shape-triangle {
+            width: 0;
+            height: 0;
+            border-left: 11px solid transparent;
+            border-right: 11px solid transparent;
+            border-bottom: 20px solid var(--bauhaus-yellow);
+        }
+        .shape-square {
+            width: 20px;
+            height: 20px;
+            background: var(--bauhaus-blue);
+            border: 2px solid var(--bauhaus-black);
+        }
+
+        .title-text h1 {
+            font-size: 28px;
+            font-weight: 900;
+            letter-spacing: -1px;
+            text-transform: uppercase;
+        }
+
+        .title-text p {
+            font-size: 13px;
+            color: #4b5563;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .network-tag {
+            background: var(--bauhaus-yellow);
+            border: 2px solid var(--bauhaus-black);
+            box-shadow: var(--shadow-hard-sm);
+            padding: 8px 16px;
+            font-size: 12px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Metric Grid */
+        .grid-metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 18px;
             margin-bottom: 24px;
         }
-        .logo-group h1 {
-            font-size: 24px;
+
+        .card-metric {
+            background: var(--bauhaus-white);
+            border: 3px solid var(--bauhaus-black);
+            box-shadow: var(--shadow-hard-sm);
+            padding: 16px 20px;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .card-metric:hover {
+            transform: translate(-2px, -2px);
+            box-shadow: var(--shadow-hard);
+        }
+
+        .card-metric.red { border-top: 8px solid var(--bauhaus-red); }
+        .card-metric.yellow { border-top: 8px solid var(--bauhaus-yellow); }
+        .card-metric.blue { border-top: 8px solid var(--bauhaus-blue); }
+        .card-metric.green { border-top: 8px solid var(--bauhaus-green); }
+
+        .card-metric .lbl {
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #4b5563;
+        }
+        .card-metric .num {
+            font-size: 32px;
             font-weight: 900;
+            line-height: 1.1;
+            margin: 6px 0;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .card-metric .sub {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #6b7280;
+        }
+
+        /* Main Workspace Grid */
+        .workspace-grid {
+            display: grid;
+            grid-template-columns: 1.1fr 1.3fr;
+            gap: 24px;
+        }
+
+        .panel-box {
+            background: var(--bauhaus-white);
+            border: 3px solid var(--bauhaus-black);
+            box-shadow: var(--shadow-hard);
+            padding: 24px;
+        }
+
+        .panel-title-bar {
+            border-bottom: 3px solid var(--bauhaus-black);
+            padding-bottom: 12px;
+            margin-bottom: 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-title-bar h2 {
+            font-size: 18px;
+            font-weight: 900;
+            text-transform: uppercase;
             letter-spacing: -0.5px;
             display: flex;
             align-items: center;
             gap: 10px;
         }
-        .logo-group h1 span { color: var(--cyan); }
-        .tagline {
-            color: var(--text-muted);
-            font-size: 13px;
-            margin-top: 4px;
-        }
-        .status-pill {
-            background: rgba(16, 185, 129, 0.1);
-            color: var(--green);
-            border: 1px solid rgba(16, 185, 129, 0.3);
-            padding: 6px 14px;
-            border-radius: 9999px;
-            font-size: 12px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .status-pill::before {
-            content: '';
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--green);
-            box-shadow: 0 0 8px var(--green);
-        }
-        .metrics-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 16px;
-            margin-bottom: 24px;
-        }
-        .metric-card {
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 18px;
-        }
-        .metric-card .title { font-size: 12px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
-        .metric-card .val { font-size: 26px; font-weight: 800; margin-top: 6px; }
-        .metric-card .subtitle { font-size: 11px; color: var(--cyan); margin-top: 4px; }
-        
-        .main-layout {
-            display: grid;
-            grid-template-columns: 1fr 1.2fr;
-            gap: 24px;
-        }
-        .panel {
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-        }
-        .panel-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 16px;
-        }
-        .panel-title {
-            font-size: 16px;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        textarea {
-            width: 100%;
-            height: 220px;
-            background: #090d16;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            color: #38bdf8;
-            padding: 12px;
-            font-size: 13px;
-            resize: vertical;
-            outline: none;
-            margin-bottom: 14px;
-        }
-        textarea:focus { border-color: var(--cyan); }
-        .btn {
-            background: linear-gradient(135deg, #00f0ff, #0284c7);
-            color: #000;
-            font-weight: 700;
-            border: none;
-            border-radius: 8px;
-            padding: 12px 20px;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            transition: all 0.2s;
-        }
-        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 13px;
-        }
-        .table th {
-            text-align: left;
-            padding: 10px 12px;
-            color: var(--text-muted);
-            border-bottom: 1px solid var(--border);
+
+        .panel-title-bar .tag {
+            background: var(--bauhaus-black);
+            color: var(--bauhaus-white);
+            padding: 4px 10px;
             font-size: 11px;
+            font-weight: 800;
             text-transform: uppercase;
         }
-        .table td {
-            padding: 12px;
-            border-bottom: 1px solid var(--border);
-        }
-        .badge {
-            display: inline-block;
-            padding: 3px 8px;
-            border-radius: 6px;
-            font-size: 11px;
-            font-weight: 700;
-        }
-        .badge-green { background: rgba(16, 185, 129, 0.15); color: var(--green); }
-        .badge-red { background: rgba(244, 63, 94, 0.15); color: var(--red); }
-        .badge-purple { background: rgba(168, 85, 247, 0.15); color: var(--purple); }
-        .badge-amber { background: rgba(245, 158, 11, 0.15); color: var(--amber); }
 
-        .timeline-step {
-            background: #0a0e1a;
-            border-left: 3px solid var(--border);
-            padding: 12px 16px;
-            margin-bottom: 12px;
-            border-radius: 0 8px 8px 0;
+        /* Editor Area */
+        textarea.bauhaus-input {
+            width: 100%;
+            height: 240px;
+            border: 2px solid var(--bauhaus-black);
+            background: #FAFAF7;
+            padding: 14px;
             font-size: 13px;
+            font-weight: 500;
+            color: var(--bauhaus-black);
+            outline: none;
+            resize: vertical;
+            margin-bottom: 16px;
         }
-        .timeline-step.success { border-left-color: var(--green); }
-        .timeline-step.danger { border-left-color: var(--red); }
-        .timeline-step.fuzz { border-left-color: var(--purple); }
-        .step-head { font-weight: 700; display: flex; justify-content: space-between; margin-bottom: 4px; }
-        .step-desc { color: var(--text-muted); font-size: 12px; }
+        textarea.bauhaus-input:focus {
+            background: var(--bauhaus-white);
+            border-color: var(--bauhaus-blue);
+        }
+
+        /* Action Buttons */
+        .btn-bauhaus {
+            background: var(--bauhaus-red);
+            color: var(--bauhaus-white);
+            border: 3px solid var(--bauhaus-black);
+            box-shadow: var(--shadow-hard-sm);
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 14px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 14px 24px;
+            cursor: pointer;
+            transition: all 0.1s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .btn-bauhaus:hover {
+            background: #d00000;
+            transform: translate(-2px, -2px);
+            box-shadow: var(--shadow-hard);
+        }
+        .btn-bauhaus:active {
+            transform: translate(2px, 2px);
+            box-shadow: 1px 1px 0px var(--bauhaus-black);
+        }
+        .btn-bauhaus.yellow {
+            background: var(--bauhaus-yellow);
+            color: var(--bauhaus-black);
+        }
+        .btn-bauhaus.blue {
+            background: var(--bauhaus-blue);
+            color: var(--bauhaus-white);
+        }
+        .btn-bauhaus:disabled {
+            background: #9ca3af !important;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: var(--shadow-hard-sm);
+        }
+
+        /* Tables */
+        .bauhaus-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 2px solid var(--bauhaus-black);
+            margin-bottom: 20px;
+        }
+        .bauhaus-table th {
+            background: var(--bauhaus-black);
+            color: var(--bauhaus-white);
+            font-size: 11px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 10px 14px;
+            text-align: left;
+        }
+        .bauhaus-table td {
+            padding: 12px 14px;
+            border-bottom: 2px solid var(--bauhaus-black);
+            font-size: 13px;
+            font-weight: 600;
+            background: var(--bauhaus-white);
+        }
+        .bauhaus-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Status Flags */
+        .flag {
+            display: inline-block;
+            padding: 4px 8px;
+            font-size: 11px;
+            font-weight: 900;
+            text-transform: uppercase;
+            border: 1.5px solid var(--bauhaus-black);
+        }
+        .flag-red { background: var(--bauhaus-red); color: var(--bauhaus-white); }
+        .flag-yellow { background: var(--bauhaus-yellow); color: var(--bauhaus-black); }
+        .flag-blue { background: var(--bauhaus-blue); color: var(--bauhaus-white); }
+        .flag-green { background: var(--bauhaus-green); color: var(--bauhaus-white); }
+        .flag-black { background: var(--bauhaus-black); color: var(--bauhaus-white); }
+
+        /* Step Timeline */
+        .timeline-box {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .step-card {
+            border: 2px solid var(--bauhaus-black);
+            background: var(--bauhaus-bg);
+            padding: 14px 18px;
+            position: relative;
+        }
+        .step-card.step-red { border-left: 8px solid var(--bauhaus-red); }
+        .step-card.step-green { border-left: 8px solid var(--bauhaus-green); }
+        .step-card.step-blue { border-left: 8px solid var(--bauhaus-blue); }
+        .step-card.step-yellow { border-left: 8px solid var(--bauhaus-yellow); }
+
+        .step-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            font-weight: 900;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+        .step-body {
+            font-size: 12px;
+            font-weight: 600;
+            color: #374151;
+        }
     </style>
 </head>
 <body>
-    <div class="header">
-        <div class="logo-group">
-            <h1><span>AEGIS</span> // C-TO-SAFE-RUST SUBNET</h1>
-            <div class="tagline">Bittensor Subnet Hackathon • Adversarial Breakers • Static Gates • Differential Fuzzing</div>
-        </div>
-        <div class="status-pill" id="net-status">Localnet Synchronized</div>
-    </div>
 
-    <div class="metrics-grid">
-        <div class="metric-card">
-            <div class="title">Current Block / NetUID</div>
-            <div class="val" id="block-val">#1,008</div>
-            <div class="subtitle">Subnet 1 (Local Subtensor)</div>
-        </div>
-        <div class="metric-card">
-            <div class="title">Anti-Cheat Hard Gate</div>
-            <div class="val" style="color: var(--green)">100% Reject</div>
-            <div class="subtitle">unsafe / libc / process &lt;1ms</div>
-        </div>
-        <div class="metric-card">
-            <div class="title">Top Translator Score</div>
-            <div class="val" style="color: var(--cyan)" id="top-score">1.2000</div>
-            <div class="subtitle">PassRate² × SpeedBonus</div>
-        </div>
-        <div class="metric-card">
-            <div class="title">Breaker Bounty Pool</div>
-            <div class="val" style="color: var(--purple)">0.5000 TAO</div>
-            <div class="subtitle">Awarded per caught divergence</div>
-        </div>
-    </div>
-
-    <div class="main-layout">
-        <!-- Interactive Controls -->
-        <div class="panel">
-            <div class="panel-header">
-                <div class="panel-title">⚡ Benchmark C Code Input</div>
-                <span class="badge badge-purple">Candidate Challenge</span>
+    <!-- Top Masthead -->
+    <header class="masthead">
+        <div class="brand">
+            <div class="bauhaus-badge">
+                <div class="shape-circle"></div>
+                <div class="shape-triangle"></div>
+                <div class="shape-square"></div>
             </div>
-            <textarea id="c-source"></textarea>
-            <div style="display: flex; gap: 10px;">
-                <button class="btn" id="run-btn" onclick="executeValidationRound()">
-                    🚀 Trigger Live Validation Round
-                </button>
+            <div class="title-text">
+                <h1>AEGIS // C-TO-SAFE-RUST</h1>
+                <p>Bittensor Global Hackathon • Adversarial Fuzzing Subnet</p>
+            </div>
+        </div>
+        <div class="network-tag">● SUBTENSOR SYNCHRONIZED</div>
+    </header>
+
+    <!-- Metrics Strip -->
+    <section class="grid-metrics">
+        <div class="card-metric yellow">
+            <div class="lbl">Current Block / NetUID</div>
+            <div class="num" id="block-num">#1,012</div>
+            <div class="sub">Localnet Consensus</div>
+        </div>
+        <div class="card-metric red">
+            <div class="lbl">Hard Gate Gatekeeping</div>
+            <div class="num">&lt; 1ms</div>
+            <div class="sub">100% Slashes Unsafe / Libc</div>
+        </div>
+        <div class="card-metric green">
+            <div class="lbl">Top Translator Emission</div>
+            <div class="num" id="top-emission">1.2000</div>
+            <div class="sub">(PassRate)² × SpeedBonus</div>
+        </div>
+        <div class="card-metric blue">
+            <div class="lbl">Breaker Bounty Pool</div>
+            <div class="num">0.5000</div>
+            <div class="sub">TAO per Caught Divergence</div>
+        </div>
+    </section>
+
+    <!-- Main Workspace -->
+    <main class="workspace-grid">
+        
+        <!-- Left: Input & Static Gate Panel -->
+        <section class="panel-box">
+            <div class="panel-title-bar">
+                <h2>■ Legacy C Ingestion</h2>
+                <span class="tag">Challenge Engine</span>
             </div>
             
-            <div style="margin-top: 24px;">
-                <div class="panel-title" style="margin-bottom: 12px;">🛡️ Anti-Cheat Hard Gate Tester</div>
-                <input id="quick-rust" type="text" placeholder='Enter Rust snippet, e.g. pub fn test() { unsafe {} }' 
-                       style="width: 100%; padding: 10px; background: #090d16; border: 1px solid var(--border); border-radius: 6px; color: #fff; font-family: 'JetBrains Mono'; font-size: 12px; margin-bottom: 8px;">
-                <button class="btn" style="background: #1e293b; color: #f8fafc; font-size: 12px; padding: 8px 14px;" onclick="testHardGate()">Test Static Gate</button>
-                <div id="gate-result" style="margin-top: 8px; font-size: 12px; font-family: 'JetBrains Mono';"></div>
-            </div>
-        </div>
+            <textarea id="c-source" class="bauhaus-input mono"></textarea>
+            
+            <button id="exec-btn" class="btn-bauhaus" onclick="executeValidationRound()">
+                ► DISPATCH VALIDATION CHALLENGE
+            </button>
 
-        <!-- Live Results & Leaderboard -->
-        <div class="panel">
-            <div class="panel-header">
-                <div class="panel-title">🏆 Real-time Metagraph Leaderboard</div>
-                <span class="badge badge-green">Live Weights</span>
+            <!-- Hard Gate Interactive Sandbox -->
+            <div style="margin-top: 32px; border-top: 2px solid var(--bauhaus-black); padding-top: 20px;">
+                <div class="panel-title-bar" style="margin-bottom: 12px; border-bottom: none; padding-bottom: 0;">
+                    <h2>▲ Static Gate Tester</h2>
+                    <span class="flag flag-yellow">&lt;1MS HARD STOP</span>
+                </div>
+                <input id="rust-input" type="text" class="mono" 
+                       placeholder='e.g. pub fn test() { unsafe { } }'
+                       style="width: 100%; padding: 12px; border: 2px solid var(--bauhaus-black); font-size: 13px; margin-bottom: 10px; outline: none;">
+                <button class="btn-bauhaus blue" style="padding: 10px 18px; font-size: 12px;" onclick="testHardGate()">
+                    VERIFY SAFETY CONSTRAINTS
+                </button>
+                <div id="gate-output" style="margin-top: 12px;"></div>
             </div>
-            <table class="table">
+        </section>
+
+        <!-- Right: Metagraph Leaderboard & Live Trace -->
+        <section class="panel-box">
+            <div class="panel-title-bar">
+                <h2>● Active Metagraph</h2>
+                <span class="tag">Live Scoring</span>
+            </div>
+
+            <table class="bauhaus-table">
                 <thead>
                     <tr>
                         <th>UID / Miner</th>
                         <th>Role</th>
-                        <th>Pass Rate</th>
+                        <th>Status</th>
                         <th>Score</th>
                         <th>Decision</th>
                     </tr>
                 </thead>
                 <tbody id="leaderboard-body">
-                    <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Loading metagraph data...</td></tr>
+                    <tr><td colspan="5" style="text-align: center;">Querying subnet state...</td></tr>
                 </tbody>
             </table>
 
-            <div style="margin-top: 24px;">
-                <div class="panel-title" style="margin-bottom: 12px;">🔍 Live Round Execution Trace</div>
-                <div id="timeline-container">
-                    <div class="timeline-step">
-                        <div class="step-head">Ready for Challenge Dispatch</div>
-                        <div class="step-desc">Click "Trigger Live Validation Round" to query Translator and Breaker miners.</div>
-                    </div>
+            <!-- Real-Time Trace -->
+            <div class="panel-title-bar" style="margin-top: 28px; margin-bottom: 14px;">
+                <h2>◆ Execution Trace</h2>
+                <span class="flag flag-black">SANDBOX LOGS</span>
+            </div>
+
+            <div id="trace-container" class="timeline-box">
+                <div class="step-card step-blue">
+                    <div class="step-header">Ready for Consensus</div>
+                    <div class="step-body">Click "DISPATCH VALIDATION CHALLENGE" to initiate cross-miner differential fuzzing.</div>
                 </div>
             </div>
-        </div>
-    </div>
+        </section>
+
+    </main>
 
     <script>
-        // Pre-load benchmark code on startup
         async function loadInitialData() {
             try {
                 const res = await fetch('/api/dataset');
@@ -526,34 +714,34 @@ def dashboard():
             tbody.innerHTML = '';
             
             data.leaderboard.forEach(m => {
-                let badgeClass = 'badge-green';
-                if (m.decision.includes('SLASHED')) badgeClass = 'badge-red';
-                else if (m.decision.includes('BOUNTY')) badgeClass = 'badge-purple';
-                else if (m.decision.includes('LOW')) badgeClass = 'badge-amber';
+                let flagClass = 'flag-green';
+                if (m.decision.includes('SLASHED')) flagClass = 'flag-red';
+                else if (m.decision.includes('BOUNTY')) flagClass = 'flag-blue';
+                else if (m.decision.includes('LOW')) flagClass = 'flag-yellow';
 
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td><strong>#${m.uid}</strong> ${m.hotkey}</td>
                     <td>${m.role}</td>
-                    <td>${m.status}</td>
-                    <td style="font-weight: 700; color: var(--cyan); font-family: 'JetBrains Mono';">${m.avg_score.toFixed(4)}</td>
-                    <td><span class="badge ${badgeClass}">${m.decision}</span></td>
+                    <td><span class="flag ${flagClass}">${m.status}</span></td>
+                    <td class="mono" style="font-size: 14px; font-weight: 800;">${m.avg_score.toFixed(4)}</td>
+                    <td><span class="flag ${flagClass}">${m.decision}</span></td>
                 `;
                 tbody.appendChild(tr);
             });
         }
 
         async function executeValidationRound() {
-            const btn = document.getElementById('run-btn');
+            const btn = document.getElementById('exec-btn');
             const cCode = document.getElementById('c-source').value;
             btn.disabled = true;
-            btn.innerText = '⚡ Orchestrating Subnet Round...';
+            btn.innerText = '● ORCHESTRATING ROUND...';
 
-            const container = document.getElementById('timeline-container');
+            const container = document.getElementById('trace-container');
             container.innerHTML = `
-                <div class="timeline-step">
-                    <div class="step-head">1. Ingesting C Benchmark & Querying Miners</div>
-                    <div class="step-desc">Dispatched TranslationSynapse to Translator axons.</div>
+                <div class="step-card step-yellow">
+                    <div class="step-header">1. Ingesting C Benchmark &amp; Querying Miners</div>
+                    <div class="step-body">Dispatched TranslationSynapse to all registered translator axons.</div>
                 </div>
             `;
 
@@ -569,23 +757,23 @@ def dashboard():
                 result.results.forEach(m => {
                     if (m.status === 'REJECTED_STATIC_GATE') {
                         html += `
-                            <div class="timeline-step danger">
-                                <div class="step-head" style="color: var(--red);">⛔ STATIC GATE REJECT: ${m.hotkey}</div>
-                                <div class="step-desc">${m.reason} • Score: 0.0000 (Slashed in &lt;1ms)</div>
+                            <div class="step-card step-red">
+                                <div class="step-header" style="color: var(--bauhaus-red);">⛔ STATIC GATE REJECT: ${m.hotkey}</div>
+                                <div class="step-body mono">${m.reason} • Score: 0.0000 (Slashed in &lt;1ms)</div>
                             </div>
                         `;
                     } else if (m.role === 'breaker') {
                         html += `
-                            <div class="timeline-step fuzz">
-                                <div class="step-head" style="color: var(--purple);">💥 ADVERSARIAL BREAKER: ${m.hotkey}</div>
-                                <div class="step-desc">Injected edge-case boundary inputs • Caught weak miner divergences • Awarded ${m.score} TAO bounty</div>
+                            <div class="step-card step-blue">
+                                <div class="step-header" style="color: var(--bauhaus-blue);">💥 ADVERSARIAL BREAKER: ${m.hotkey}</div>
+                                <div class="step-body mono">Injected edge-case boundary inputs • Caught weak miner divergences • Awarded ${m.score} TAO bounty</div>
                             </div>
                         `;
                     } else {
                         html += `
-                            <div class="timeline-step success">
-                                <div class="step-head" style="color: var(--green);">✅ COMPILATION &amp; DIFF FUZZ: ${m.hotkey}</div>
-                                <div class="step-desc">Pass Rate: ${(m.pass_rate * 100).toFixed(1)}% • Final Score: ${m.score.toFixed(4)} (${m.breakdown.base_score} × ${m.breakdown.safety_penalty} × ${m.breakdown.speed_bonus})</div>
+                            <div class="step-card step-green">
+                                <div class="step-header" style="color: var(--bauhaus-green);">✅ COMPILATION &amp; DIFF FUZZ: ${m.hotkey}</div>
+                                <div class="step-body mono">Pass Rate: ${(m.pass_rate * 100).toFixed(1)}% • Final Score: ${m.score.toFixed(4)} (${m.breakdown.base_score} × ${m.breakdown.safety_penalty} × ${m.breakdown.speed_bonus})</div>
                             </div>
                         `;
                     }
@@ -594,30 +782,29 @@ def dashboard():
                 container.innerHTML = html;
                 fetchLeaderboard();
                 
-                // Update block
                 const stat = await (await fetch('/api/status')).json();
-                document.getElementById('block-val').innerText = '#' + stat.current_block;
+                document.getElementById('block-num').innerText = '#' + stat.current_block;
             } catch (e) {
-                container.innerHTML = `<div class="timeline-step danger"><div class="step-head">Error</div><div class="step-desc">${e.message}</div></div>`;
+                container.innerHTML = `<div class="step-card step-red"><div class="step-header">Execution Error</div><div class="step-body">${e.message}</div></div>`;
             } finally {
                 btn.disabled = false;
-                btn.innerText = '🚀 Trigger Live Validation Round';
+                btn.innerText = '► DISPATCH VALIDATION CHALLENGE';
             }
         }
 
         async function testHardGate() {
-            const input = document.getElementById('quick-rust').value;
+            const input = document.getElementById('rust-input').value;
             const res = await fetch('/api/check-gate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ rust_code: input })
             });
             const d = await res.json();
-            const out = document.getElementById('gate-result');
+            const out = document.getElementById('gate-output');
             if (d.passed) {
-                out.innerHTML = `<span style="color: var(--green);">[PASS] Safe Rust approved in ${d.execution_time_seconds * 1000}ms! Score: ${d.score_if_passed}</span>`;
+                out.innerHTML = `<div class="step-card step-green"><div class="step-header" style="color: var(--bauhaus-green);">[APPROVED] 100% SAFE RUST</div><div class="step-body mono">Passed static analysis in ${(d.execution_time_seconds * 1000).toFixed(3)}ms! Theoretical score: ${d.score_if_passed}</div></div>`;
             } else {
-                out.innerHTML = `<span style="color: var(--red);">[REJECT] Hard Gate Triggered: ${d.reason} (Score: 0.0)</span>`;
+                out.innerHTML = `<div class="step-card step-red"><div class="step-header" style="color: var(--bauhaus-red);">[HARD STOP] REJECTED</div><div class="step-body mono">${d.reason} (Score: 0.0)</div></div>`;
             }
         }
 
