@@ -1,6 +1,6 @@
 # Bittensor C-to-Safe-Rust Subnet (Adversarial Breaker Architecture)
 
-An adversarial, production-ready Bittensor subnet that incentivizes AI miners to translate legacy C codebases into **100% Safe Rust** (forbidding `unsafe`, `build.rs`, `libc`, and process execution), while adversarial **"Breaker" miners** hunt for logic regressions, memory divergences, and runtime panics to claim slashing bounties.
+An adversarial Bittensor subnet prototype that incentivizes AI miners to translate legacy C codebases into **100% Safe Rust** (enforced by `rustc -F unsafe_code`), while adversarial **"Breaker" miners** hunt for logic regressions, boundary divergences, and runtime panics to claim bug bounties.
 
 ---
 
@@ -14,59 +14,75 @@ flowchart TD
     end
 
     subgraph Miners
-        MH["Miner Honest (Safe Rust + Repair)"]
+        MH["Miner Honest (Safe Rust Candidate)"]
         MW["Miner Weak (Naive Translation)"]
-        MC["Miner Cheater (Unsafe / Spoofed)"]
+        MC["Miner Cheater (Unsafe Attempt)"]
         MB["Miner Breaker (Adversarial Fuzzer)"]
     end
 
     subgraph Security & Verification
-        GATE{"Static Analysis Hard Gate (<1s)"}
-        SANDBOX["Docker Sandbox (--network none)"]
-        DIFF_FUZZ["Differential Fuzzing Engine"]
-        SCORING["Squared Pass-Rate Emission Formula"]
+        GATE{"Pre-filter Static Gate + rustc -F unsafe_code"}
+        SANDBOX["Isolated Sandbox Execution (Docker / Real Compilers)"]
+        DIFF_FUZZ["Differential Byte Verification Engine"]
+        SCORING["Cubed Pass-Rate + 50% Breaker Rule"]
     end
 
-    VAL -->|"1. Translation Challenge (C Source)"| MH & MW & MC
-    MH & MW & MC -->|"2. Rust Code Submission"| VAL
+    VAL -->|"1. Parameterized C Challenge (Stdin/Stdout bytes)"| MH & MW & MC
+    MH & MW & MC -->|"2. Rust Code Submission (fn main)"| VAL
     VAL --> GATE
     
-    GATE -->|"Contains unsafe/libc/Command"| REJECT["Score = 0.0 (Immediate Slashed)"]
-    GATE -->|"Passes Safe Code Gate"| VAL_BREAKER["Send to Breaker"]
+    GATE -->|"Contains unsafe / Fails compilation"| REJECT["Score = 0.0 (Zero Emission)"]
+    GATE -->|"Passes Safe Compilation"| VAL_BREAKER["Send Candidate to Breakers"]
     
     VAL_BREAKER -->|"3. Audit Challenge (C + Rust)"| MB
-    MB -->|"4. Adversarial Edge Cases"| VAL
+    MB -->|"4. Adversarial Inputs (Sanitizer-Verified)"| VAL
     
     VAL --> SANDBOX
     SANDBOX --> DIFF_FUZZ
     DIFF_FUZZ --> SCORING
-    SCORING -->|"5. Set Weights"| SUBTENSOR
+    SCORING -->|"5. Set Weights (EMA Normalized)"| SUBTENSOR
 ```
 
 ---
 
 ## Key Mechanism & Math
 
-### 1. The Squared Pass-Rate Scoring Formula
-$$\text{Base Score} = (\text{Differential\_Fuzz\_Pass\_Rate})^2$$
-$$\text{Safety Penalty} = \begin{cases} 1.0 & \text{if 0 unsafe blocks} \\ 0.0 & \text{if unsafe blocks present (Hard Reject)} \end{cases}$$
-$$\text{Speed Bonus} = \min\left(1.2, 1.0 + \frac{T_{\max} - T_{\text{actual}}}{T_{\max}} \times 0.2\right)$$
-$$\text{Final Score} = \text{Base Score} \times \text{Safety Penalty} \times \text{Speed Bonus}$$
+### 1. The Cubed Pass-Rate & 50% Breaker Scoring Formula
 
-*Note: The speed bonus is strictly capped at $1.20$ to disincentivize miners from spoofing translations with an embedded C interpreter or C FFI.*
+For a translator submission $t$:
+- If candidate fails static pre-filter, fails `rustc -F unsafe_code` compilation, or exceeds source size limit (64 KB):
+  $$\text{pre}_t = 0.0$$
+- Otherwise, over secret sanitizer-checked hidden tests:
+  $$\text{pre}_t = \left(\frac{\text{passed\_hidden}}{\text{total\_hidden}}\right)^3$$
 
-### 2. Dual Miner Roles
+*(Note: Speed bonuses are omitted to eliminate caching and precomputation gaming).*
+
+### 2. Breaker Validity & The Anti-Collusion 50% Rule
+
+Breaker miners submit raw byte inputs targeting edge cases.
+- **Validity Criteria**: An input is valid if its size $\le 64\text{ KB}$ and it executes cleanly on the reference binary compiled with AddressSanitizer and UndefinedBehaviorSanitizer (`gcc -fsanitize=address,undefined`). Inputs that crash, time out, or trigger sanitizer diagnostics on C are rejected as invalid (preventing UB farming).
+- **Breaking Condition**: A valid input where candidate Rust stdout bytes $\ne$ C reference stdout bytes, or candidate exit code $\ne$ C reference exit code.
+- **The 50% Anti-Collusion Bounty**: If translator $t$ is broken by a set of unique breakers $B_t$:
+  $$\text{Score}(t) = 0.0$$
+  $$\text{Bounty}(b) = \frac{0.5 \times \text{pre}_t}{|B_t|} \quad \text{for each } b \in B_t$$
+  
+  *Game-theoretic guarantee*: If a translator deliberately plants a vulnerability and colludes with a breaker to claim it, the pair forfeits $\text{pre}_t$ while gaining only $0.5 \times \text{pre}_t$, resulting in a net loss of $-0.5 \times \text{pre}_t$. Collusion is strictly unprofitable.
+- **Penalties**: Empty breaker responses yield $0.0$. Invalid (UB-triggering) inputs incur a penalty floored at $0.0$.
+
+### 3. Dual Miner Roles
 - **Translator Miner (`neurons/miner_translator.py`)**:
   - Translates legacy C code into pure Safe Rust (`#![forbid(unsafe_code)]`).
-  - Employs an internal pre-submission self-repair loop to verify the absence of `unsafe` and syntax regressions before dispatching.
+  - Reads stdin as raw bytes, writes stdout as raw bytes, returns an exit code.
+  - Employs an internal pre-submission self-repair loop to verify the absence of `unsafe` and compilation errors before dispatching.
 - **Breaker Miner (`neurons/miner_breaker.py`)**:
-  - Adversarial fuzzer that examines C code and candidate Rust code to generate inputs that trigger divergences (null-byte boundaries, Unicode multibyte sequences, integer overflow points).
-  - Earns lucrative bug bounties when catching translation flaws.
+  - Adversarial fuzzer that examines C code and candidate Rust code to generate raw byte inputs that trigger divergences.
+  - Pre-screened against AddressSanitizer and UndefinedBehaviorSanitizer to ensure validity.
+  - Earns bug bounties under the 50% anti-collusion rule when catching translation flaws.
 
-### 3. Strict Validator Sandboxing (`neurons/validator.py`)
-- **Step 1 (Static Analysis Hard Gate)**: Rejects forbidden keywords (`unsafe`, `build.rs`, `std::process::Command`, `libc::`, `extern "C"`) in $< 1\text{ ms}$ with score $0.0$.
-- **Step 2 (Sandboxed Compilation)**: Compiles untrusted code inside isolated containers (`--network none`, `--read-only`, non-root user).
-- **Step 3 (Differential Fuzzing)**: Evaluates stdout byte-for-byte between the C binary and the Rust binary across 50–100 property-based hidden tests.
+### 4. Strict Validator Sandboxing (`neurons/validator.py`)
+- **Step 1 (Static Analysis Pre-filter & Compiler Gate)**: Pre-filters obvious forbidden patterns, then strictly enforces `#![forbid(unsafe_code)]` via `rustc -F unsafe_code` inside the compiler.
+- **Step 2 (Sandboxed Compilation & Execution)**: Compiles untrusted code inside isolated containers (`--network none`, `--read-only`, `--tmpfs /tmp:rw,noexec,size=16m`, `--cap-drop ALL`, non-root user) or via `AEGIS_ALLOW_UNSANDBOXED=1` local compiler pipeline.
+- **Step 3 (Differential Verification)**: Evaluates stdout byte-for-byte and exit codes between the C binary and the Rust binary across secret, sanitizer-checked hidden tests and breaker-submitted inputs.
 
 ---
 
@@ -75,30 +91,33 @@ $$\text{Final Score} = \text{Base Score} \times \text{Safety Penalty} \times \te
 ```text
 bittensor-c2rust-subnet/
 ├── dataset/
-│   ├── hidden_tests.py         # Hypothesis-driven adversarial property fuzzer
-│   └── sample_c_code.c         # Benchmark C string/parser algorithm
+│   ├── hidden_tests.py         # Secret sanitizer-verified property test generator
+│   └── tasks.py                # Parameterized UB-free C tasks pool
 ├── neurons/
 │   ├── miner.py                # Unified miner entrypoint (--type translator|breaker)
 │   ├── miner_translator.py     # C-to-Safe-Rust translator miner with repair loop
 │   ├── miner_breaker.py        # Adversarial edge-case generator
+│   ├── scoring.py              # Cubed pass-rate and 50% anti-collusion breaker logic
 │   └── validator.py            # Hard gate, differential fuzzer & scoring neuron
 ├── protocol/
 │   ├── __init__.py
-│   └── protocol.py             # TranslationSynapse and BreakerSynapse
+│   └── protocol.py             # TranslationSynapse and BreakerSynapse (stdin/stdout bytes)
 ├── sandbox/
 │   ├── Dockerfile              # Multi-stage secure compilation container
-│   └── sandbox_runner.py       # Sandboxed execution coordinator
+│   └── sandbox_runner.py       # Sandboxed execution coordinator (Docker or local compiler)
 ├── substrate/
-│   └── __init__.py             # Real Bittensor SDK & high-fidelity mock fallback
+│   └── __init__.py             # Real Bittensor SDK & high-fidelity mock fallback (--mock)
 ├── scripts/
-│   ├── run_demo.py             # 4-miner live hackathon demonstration
+│   ├── run_demo.py             # Live subnet demo with genuine execution results
 │   ├── run_demo.sh             # Bash runner for live demo
 │   ├── verify_anti_cheat.py    # Static analysis and formula verification suite
 │   └── verify_anti_cheat.sh    # Bash runner for anti-cheat suite
 └── tests/
     ├── test_breaker.py         # Breaker adversarial generation unit tests
     ├── test_end_to_end.py      # Master CI/CD integration suite
-    └── test_miner_translation.py # Safe Rust synthesis unit tests
+    ├── test_miner_translation.py # Safe Rust synthesis unit tests
+    ├── test_sandbox.py         # Sandbox compilation, isolation, and byte I/O tests
+    └── test_scoring.py         # 50% rule, anti-collusion, and weight assignment tests
 ```
 
 ---
@@ -106,7 +125,7 @@ bittensor-c2rust-subnet/
 ## Verification & Execution Commands
 
 ### 1. Run Anti-Cheat Hard Gate Verification
-Verifies that `unsafe`, C-interpreter spoofing, and `libc` backdoors are immediately rejected in $< 1\text{s}$ with a $0.0$ score:
+Verifies that `unsafe`, C-interpreter spoofing, and `libc` backdoors are immediately rejected:
 ```bash
 python scripts/verify_anti_cheat.py
 ```

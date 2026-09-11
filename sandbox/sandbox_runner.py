@@ -1,17 +1,23 @@
 """
-Sandbox Runner for C-to-Safe-Rust Subnet.
-Orchestrates isolated compilation and differential fuzzing execution.
-Supports Docker (--network none, --read-only) with local/emulation fallback.
+Sandbox Runner for C-to-Safe-Rust Subnet (sandbox/sandbox_runner.py).
+Strictly isolated compilation and differential execution.
+Supports Docker (--network none, --read-only, --cap-drop ALL, memory/pid limits)
+and a dev-only native compiler pipeline via AEGIS_ALLOW_UNSANDBOXED=1.
+NEVER uses emulators or simulated string-matching results.
 """
 
-import os
 import sys
+import os
 import time
+import uuid
 import shutil
+import base64
 import tempfile
 import subprocess
 import logging
-from typing import Tuple, Dict, Any, Optional
+from typing import Tuple, Dict, Any, List, Optional, Union
+
+from sandbox.batch_runner import run_batch, write_input_bundle, read_input_bundle
 
 logger = logging.getLogger("sandbox")
 if not logger.handlers:
@@ -20,223 +26,421 @@ if not logger.handlers:
     logger.addHandler(h)
     logger.setLevel(logging.INFO)
 
+MAX_SOURCE_SIZE = 64 * 1024  # 64 KB source size limit
+
+
+def _check_docker() -> bool:
+    """Verify if Docker CLI and daemon are responsive."""
+    try:
+        res = subprocess.run(
+            ["docker", "info"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=3
+        )
+        return res.returncode == 0
+    except Exception:
+        return False
+
+
+def _get_rustc_extra_args() -> List[str]:
+    """Detect if host rustc needs target flags (e.g. gnullvm on Windows with llvm-mingw)."""
+    if sys.platform == "win32":
+        # Test compiling a dummy rust snippet
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                rs = os.path.join(td, "check.rs")
+                with open(rs, "w") as f:
+                    f.write("fn main(){}")
+                test_res = subprocess.run(
+                    ["rustc", "--edition", "2021", rs, "-o", os.path.join(td, "check.exe")],
+                    capture_output=True,
+                    timeout=5
+                )
+                if test_res.returncode != 0:
+                    # Try gnullvm
+                    gnullvm_res = subprocess.run(
+                        ["rustc", "--target", "x86_64-pc-windows-gnullvm", "--edition", "2021", rs, "-o", os.path.join(td, "check.exe")],
+                        capture_output=True,
+                        timeout=5
+                    )
+                    if gnullvm_res.returncode == 0:
+                        return ["--target", "x86_64-pc-windows-gnullvm"]
+        except Exception:
+            pass
+    return []
+
 
 class SandboxRunner:
-    def __init__(self, docker_image: str = "c2rust-sandbox", force_local: bool = False):
+    def __init__(self, docker_image: str = "c2rust-sandbox", force_unsandboxed: bool = False):
         self.docker_image = docker_image
-        self.force_local = force_local
-        self.docker_available = self._check_docker() if not force_local else False
-        logger.info(f"Sandbox initialized. Docker available: {self.docker_available}")
+        self.docker_available = _check_docker()
+        
+        allow_unsandboxed = force_unsandboxed or (os.environ.get("AEGIS_ALLOW_UNSANDBOXED") == "1")
 
-    def _check_docker(self) -> bool:
-        """Verify if Docker CLI and daemon are responsive."""
-        try:
-            res = subprocess.run(
-                ["docker", "info"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                timeout=3,
-                text=True
+        if not self.docker_available and not allow_unsandboxed:
+            raise RuntimeError(
+                "Docker is not available and AEGIS_ALLOW_UNSANDBOXED=1 is not set. "
+                "Refusing to run untrusted code without container sandbox. "
+                "Set AEGIS_ALLOW_UNSANDBOXED=1 only for local development."
             )
-            return res.returncode == 0
-        except Exception:
-            return False
+
+        self.use_docker = self.docker_available and not force_unsandboxed
+        self.rustc_extra_args = _get_rustc_extra_args() if not self.use_docker else []
+        logger.info(f"Sandbox initialized. Docker: {self.docker_available}, Active Mode: {'Docker' if self.use_docker else 'Unsandboxed Local Toolchain'}")
+
+    def compile_c(
+        self,
+        c_code: str,
+        work_dir: str,
+        output_name: str = "c_binary",
+        sanitizer: bool = False
+    ) -> Tuple[bool, str, str]:
+        """
+        Compiles trusted C reference code.
+        Standard: gcc -std=c11 -O2 ref.c -o ref
+        Sanitizer: gcc -std=c11 -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all ref.c -o ref_san
+        """
+        src_name = "ref.c"
+        src_path = os.path.join(work_dir, src_name)
+        with open(src_path, "w", encoding="utf-8") as f:
+            f.write(c_code)
+
+        bin_suffix = ".exe" if (sys.platform == "win32" and not self.use_docker) else ""
+        out_bin_name = output_name + bin_suffix
+        out_path = os.path.join(work_dir, out_bin_name)
+
+        if sanitizer:
+            c_flags = ["-std=c11", "-O1", "-g", "-fsanitize=address,undefined", "-fno-sanitize-recover=all"]
+        else:
+            c_flags = ["-std=c11", "-O2"]
+
+        if self.use_docker:
+            container_name = f"aegis_compile_c_{uuid.uuid4().hex[:8]}"
+            cmd = [
+                "docker", "run", "--rm", "--name", container_name,
+                "--network", "none",
+                "-v", f"{work_dir}:/work", "-w", "/work",
+                self.docker_image,
+                "gcc"
+            ] + c_flags + [src_name, "-o", output_name]
+            try:
+                res = subprocess.run(cmd, capture_output=True, timeout=30)
+                stderr_text = res.stderr.decode("utf-8", errors="replace")
+                if res.returncode != 0:
+                    return False, "", f"Docker C compilation failed (exit {res.returncode}): {stderr_text}"
+                return True, os.path.join(work_dir, output_name), ""
+            except subprocess.TimeoutExpired:
+                subprocess.run(["docker", "rm", "-f", container_name], capture_output=True)
+                return False, "", "C compilation timed out in container"
+        else:
+            cmd = ["gcc"] + c_flags + [src_path, "-o", out_path]
+            try:
+                res = subprocess.run(cmd, capture_output=True, timeout=30)
+                stderr_text = res.stderr.decode("utf-8", errors="replace")
+                if res.returncode != 0:
+                    return False, "", f"Local GCC compilation failed (exit {res.returncode}): {stderr_text}"
+                return True, out_path, ""
+            except subprocess.TimeoutExpired:
+                return False, "", "C compilation timed out locally"
+            except Exception as e:
+                return False, "", f"GCC invocation error: {str(e)}"
+
+    def compile_rust(
+        self,
+        rust_code: str,
+        work_dir: str,
+        output_name: str = "rust_binary"
+    ) -> Tuple[bool, str, str]:
+        """
+        Compiles candidate Rust code:
+        rustc --edition 2021 -O -C overflow-checks=on -F unsafe_code main.rs -o cand
+        Enforces 64 KB source size limit.
+        """
+        # 1. Check size limit
+        encoded_bytes = rust_code.encode("utf-8")
+        if len(encoded_bytes) > MAX_SOURCE_SIZE:
+            return False, "", f"Source code exceeds limit: {len(encoded_bytes)} bytes > {MAX_SOURCE_SIZE} bytes max"
+
+        src_name = "main.rs"
+        src_path = os.path.join(work_dir, src_name)
+        with open(src_path, "w", encoding="utf-8") as f:
+            f.write(rust_code)
+
+        bin_suffix = ".exe" if (sys.platform == "win32" and not self.use_docker) else ""
+        out_bin_name = output_name + bin_suffix
+        out_path = os.path.join(work_dir, out_bin_name)
+
+        rust_flags = [
+            "--edition", "2021",
+            "-O",
+            "-C", "overflow-checks=on",
+            "-F", "unsafe_code"
+        ]
+
+        if self.use_docker:
+            container_name = f"aegis_compile_rs_{uuid.uuid4().hex[:8]}"
+            cmd = [
+                "docker", "run", "--rm", "--name", container_name,
+                "--network", "none",
+                "-v", f"{work_dir}:/work", "-w", "/work",
+                self.docker_image,
+                "rustc"
+            ] + rust_flags + [src_name, "-o", output_name]
+            try:
+                res = subprocess.run(cmd, capture_output=True, timeout=30)
+                stderr_text = res.stderr.decode("utf-8", errors="replace")
+                if res.returncode != 0:
+                    return False, "", f"Rust compilation failed (exit {res.returncode}): {stderr_text}"
+                return True, os.path.join(work_dir, output_name), ""
+            except subprocess.TimeoutExpired:
+                subprocess.run(["docker", "rm", "-f", container_name], capture_output=True)
+                return False, "", "Rust compilation timed out in container"
+        else:
+            cmd = ["rustc"] + self.rustc_extra_args + rust_flags + [src_path, "-o", out_path]
+            try:
+                res = subprocess.run(cmd, capture_output=True, timeout=30)
+                stderr_text = res.stderr.decode("utf-8", errors="replace")
+                if res.returncode != 0:
+                    return False, "", f"Local rustc compilation failed (exit {res.returncode}): {stderr_text}"
+                return True, out_path, ""
+            except subprocess.TimeoutExpired:
+                return False, "", "Rust compilation timed out locally"
+            except Exception as e:
+                return False, "", f"rustc invocation error: {str(e)}"
+
+    def execute_batch(
+        self,
+        binary_path: str,
+        work_dir: str,
+        binary_basename: str,
+        test_inputs: List[Union[bytes, str]],
+        per_test_timeout: float = 2.0,
+        max_output_bytes: int = 65536
+    ) -> List[Dict[str, Any]]:
+        """
+        Executes binary against all test inputs in a single batch.
+        Uses Docker with strict security flags if enabled, or native execution under unsandboxed mode.
+        """
+        raw_inputs = [i.encode("utf-8") if isinstance(i, str) else bytes(i) for i in test_inputs]
+        
+        if self.use_docker:
+            container_name = f"aegis_run_{uuid.uuid4().hex[:8]}"
+            bundle_path = os.path.join(work_dir, "inputs.bin")
+            write_input_bundle(bundle_path, raw_inputs)
+
+            # Copy batch_runner.py into work_dir so container can run it
+            runner_src = os.path.join(os.path.dirname(__file__), "batch_runner.py")
+            shutil.copyfile(runner_src, os.path.join(work_dir, "batch_runner.py"))
+
+            cmd = [
+                "docker", "run", "--rm", "--name", container_name,
+                "--network", "none",
+                "--read-only",
+                "--tmpfs", "/tmp:rw,noexec,size=16m",
+                "--cap-drop", "ALL",
+                "--security-opt", "no-new-privileges",
+                "--pids-limit", "64",
+                "--memory", "256m",
+                "--memory-swap", "256m",
+                "--cpus", "1",
+                "--user", "65534:65534",
+                "-v", f"{work_dir}:/work:ro",
+                "-v", f"{work_dir}:/results:rw",
+                "-w", "/work",
+                self.docker_image,
+                "python3", "/work/batch_runner.py",
+                f"/work/{binary_basename}",
+                "/work/inputs.bin",
+                "/results/results.json",
+                str(per_test_timeout),
+                str(max_output_bytes)
+            ]
+
+            total_timeout = max(10.0, per_test_timeout * len(raw_inputs) + 15.0)
+            try:
+                res = subprocess.run(cmd, capture_output=True, timeout=total_timeout)
+                results_path = os.path.join(work_dir, "results.json")
+                if os.path.exists(results_path):
+                    import json
+                    with open(results_path, "r", encoding="utf-8") as f:
+                        return json.load(f)
+                else:
+                    err_msg = res.stderr.decode("utf-8", errors="replace")
+                    logger.error(f"Docker batch runner produced no output: {err_msg}")
+                    return [{"exit_code": -1, "stdout_b64": "", "stderr_b64": "", "timed_out": True} for _ in raw_inputs]
+            except subprocess.TimeoutExpired:
+                logger.warning(f"Host timeout killing container {container_name}")
+                subprocess.run(["docker", "rm", "-f", container_name], capture_output=True)
+                return [{"exit_code": -9, "stdout_b64": "", "stderr_b64": "", "timed_out": True} for _ in raw_inputs]
+        else:
+            return run_batch(
+                binary_path=binary_path,
+                inputs=raw_inputs,
+                per_test_timeout=per_test_timeout,
+                max_output_bytes=max_output_bytes
+            )
+
+    def run_sanitizer_precheck(
+        self,
+        c_code: str,
+        test_inputs: List[Union[bytes, str]],
+        timeout: float = 2.0
+    ) -> List[Dict[str, Any]]:
+        """
+        Executes test inputs on ref_san (AddressSanitizer + UndefinedBehaviorSanitizer build).
+        Inputs that crash, timeout, or trigger sanitizers are flagged as invalid (UB).
+        """
+        temp_dir = tempfile.mkdtemp(prefix="aegis_san_")
+        try:
+            ok, bin_path, err = self.compile_c(c_code, temp_dir, output_name="ref_san", sanitizer=True)
+            if not ok:
+                logger.error(f"Failed to build sanitizer reference: {err}")
+                return [{"is_clean": False, "reason": f"Sanitizer build failed: {err}"} for _ in test_inputs]
+
+            results = self.execute_batch(
+                binary_path=bin_path,
+                work_dir=temp_dir,
+                binary_basename="ref_san",
+                test_inputs=test_inputs,
+                per_test_timeout=timeout
+            )
+
+            evaluated = []
+            for res in results:
+                stderr_bytes = base64.b64decode(res.get("stderr_b64", ""))
+                timed_out = res.get("timed_out", False)
+                exit_code = res.get("exit_code", 0)
+                san_trig = res.get("sanitizer_triggered", False)
+
+                is_clean = (exit_code == 0) and (not timed_out) and (not san_trig)
+                reason = "clean"
+                if timed_out:
+                    reason = "timeout"
+                elif san_trig or exit_code != 0:
+                    reason = f"sanitizer/crash (exit={exit_code}): {stderr_bytes[:150].decode(errors='replace')}"
+
+                evaluated.append({
+                    "is_clean": is_clean,
+                    "reason": reason,
+                    "exit_code": exit_code,
+                    "timed_out": timed_out
+                })
+            return evaluated
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
     def compile_and_test(
         self,
         c_code: str,
         rust_code: str,
-        test_inputs: list,
-        timeout: float = 5.0
+        test_inputs: List[Union[bytes, str]],
+        timeout: float = 2.0
     ) -> Dict[str, Any]:
         """
-        Executes complete compilation and differential fuzzing suite for (C, Rust) pair.
-        Returns detailed results including pass rate, divergences, and execution times.
+        Full differential fuzzing cycle:
+        1. Compiles C reference binary in isolated work dir.
+        2. Compiles Rust candidate binary in separate isolated work dir.
+        3. Executes batch test suite against both binaries.
+        4. Compares stdout bytes and exit codes.
         """
-        # If Docker is available, we run the Docker sandbox workflow
-        if self.docker_available:
-            return self._run_in_docker(c_code, rust_code, test_inputs, timeout)
-        else:
-            return self._run_emulated_or_local(c_code, rust_code, test_inputs, timeout)
+        total = len(test_inputs)
+        if total == 0:
+            return {
+                "compilation_success": True,
+                "pass_rate": 0.0,
+                "passed_tests": 0,
+                "total_tests": 0,
+                "divergences": []
+            }
 
-    def _run_in_docker(
-        self,
-        c_code: str,
-        rust_code: str,
-        test_inputs: list,
-        timeout: float
-    ) -> Dict[str, Any]:
-        """Strict Docker sandbox execution with --network none."""
-        temp_dir = tempfile.mkdtemp(prefix="c2rust_docker_")
+        # 1. Compile C reference in C temp dir
+        c_temp_dir = tempfile.mkdtemp(prefix="aegis_c_")
+        rs_temp_dir = tempfile.mkdtemp(prefix="aegis_rs_")
+
         try:
-            c_path = os.path.join(temp_dir, "solution.c")
-            rs_path = os.path.join(temp_dir, "solution.rs")
-            with open(c_path, "w", encoding="utf-8") as f:
-                f.write(c_code)
-            with open(rs_path, "w", encoding="utf-8") as f:
-                f.write(rust_code)
-
-            # 1. Compile C in container
-            c_cmd = [
-                "docker", "run", "--rm", "--network", "none",
-                "-v", f"{temp_dir}:/work", "-w", "/work",
-                self.docker_image, "gcc", "-O2", "solution.c", "-o", "c_binary"
-            ]
-            c_res = subprocess.run(c_cmd, capture_output=True, text=True, timeout=15)
-            if c_res.returncode != 0:
+            c_ok, c_bin, c_err = self.compile_c(c_code, c_temp_dir, output_name="c_ref", sanitizer=False)
+            if not c_ok:
                 return {
                     "compilation_success": False,
                     "stage": "c_compilation",
-                    "error": c_res.stderr,
+                    "error": c_err,
                     "pass_rate": 0.0,
-                    "total_tests": len(test_inputs),
-                    "passed_tests": 0
+                    "passed_tests": 0,
+                    "total_tests": total,
+                    "divergences": []
                 }
 
-            # 2. Compile Rust in container with `#![forbid(unsafe_code)]` enforcement
-            rs_cmd = [
-                "docker", "run", "--rm", "--network", "none",
-                "-v", f"{temp_dir}:/work", "-w", "/work",
-                self.docker_image, "rustc", "--crate-type", "bin", "solution.rs", "-o", "rust_binary"
-            ]
-            rs_res = subprocess.run(rs_cmd, capture_output=True, text=True, timeout=15)
-            if rs_res.returncode != 0:
+            # 2. Compile Rust candidate in isolated Rust temp dir
+            rs_ok, rs_bin, rs_err = self.compile_rust(rust_code, rs_temp_dir, output_name="rust_cand")
+            if not rs_ok:
                 return {
                     "compilation_success": False,
                     "stage": "rust_compilation",
-                    "error": rs_res.stderr,
+                    "error": rs_err,
                     "pass_rate": 0.0,
-                    "total_tests": len(test_inputs),
-                    "passed_tests": 0
+                    "passed_tests": 0,
+                    "total_tests": total,
+                    "divergences": []
                 }
 
-            # 3. Differential Fuzzing in container
+            # 3. Execute batch on C reference
+            c_results = self.execute_batch(
+                binary_path=c_bin,
+                work_dir=c_temp_dir,
+                binary_basename="c_ref",
+                test_inputs=test_inputs,
+                per_test_timeout=timeout
+            )
+
+            # 4. Execute batch on Rust candidate
+            rs_results = self.execute_batch(
+                binary_path=rs_bin,
+                work_dir=rs_temp_dir,
+                binary_basename="rust_cand",
+                test_inputs=test_inputs,
+                per_test_timeout=timeout
+            )
+
+            # 5. Compare byte outputs and exit codes
             passed = 0
             divergences = []
-            for idx, inp in enumerate(test_inputs):
-                inp_str = str(inp)
-                # Run C
-                c_exec = subprocess.run(
-                    ["docker", "run", "--rm", "--network", "none",
-                     "-v", f"{temp_dir}:/work:ro", "-w", "/work",
-                     self.docker_image, "./c_binary", inp_str],
-                    capture_output=True, text=True, timeout=timeout
-                )
-                # Run Rust
-                rs_exec = subprocess.run(
-                    ["docker", "run", "--rm", "--network", "none",
-                     "-v", f"{temp_dir}:/work:ro", "-w", "/work",
-                     self.docker_image, "./rust_binary", inp_str],
-                    capture_output=True, text=True, timeout=timeout
-                )
 
-                if c_exec.stdout == rs_exec.stdout and rs_exec.returncode == 0:
+            for idx, (c_res, rs_res) in enumerate(zip(c_results, rs_results)):
+                c_out = base64.b64decode(c_res.get("stdout_b64", ""))
+                rs_out = base64.b64decode(rs_res.get("stdout_b64", ""))
+                c_exit = c_res.get("exit_code", -1)
+                rs_exit = rs_res.get("exit_code", -1)
+                rs_timed_out = rs_res.get("timed_out", False)
+
+                # Pass iff identical stdout bytes AND identical exit code
+                if (c_out == rs_out) and (c_exit == rs_exit) and (not rs_timed_out):
                     passed += 1
                 else:
+                    inp_raw = test_inputs[idx]
+                    inp_bytes = inp_raw.encode("utf-8") if isinstance(inp_raw, str) else bytes(inp_raw)
                     divergences.append({
-                        "input": inp_str,
-                        "c_stdout": c_exec.stdout,
-                        "rust_stdout": rs_exec.stdout,
-                        "rust_stderr": rs_exec.stderr,
-                        "c_exit": c_exec.returncode,
-                        "rust_exit": rs_exec.returncode
+                        "index": idx,
+                        "input_repr": repr(inp_bytes[:64]),
+                        "input_len": len(inp_bytes),
+                        "c_stdout_len": len(c_out),
+                        "rust_stdout_len": len(rs_out),
+                        "c_exit": c_exit,
+                        "rust_exit": rs_exit,
+                        "rust_timed_out": rs_timed_out,
+                        "reason": "exit code mismatch" if c_exit != rs_exit else "stdout mismatch"
                     })
 
-            pass_rate = passed / len(test_inputs) if test_inputs else 0.0
+            pass_rate = passed / total if total > 0 else 0.0
+
             return {
                 "compilation_success": True,
                 "pass_rate": pass_rate,
                 "passed_tests": passed,
-                "total_tests": len(test_inputs),
+                "total_tests": total,
                 "divergences": divergences
             }
+
         finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def _run_emulated_or_local(
-        self,
-        c_code: str,
-        rust_code: str,
-        test_inputs: list,
-        timeout: float
-    ) -> Dict[str, Any]:
-        """
-        Emulated execution runner for differential fuzzing.
-        Evaluates the semantic behavior of C and Rust code logic accurately,
-        enabling full end-to-end verification even when host lacks GCC/Rust toolchains.
-        """
-        total = len(test_inputs)
-        if total == 0:
-            return {"compilation_success": True, "pass_rate": 1.0, "passed_tests": 0, "total_tests": 0, "divergences": []}
-
-        # Check for syntax / compilation failure simulation
-        if "syntax_error" in rust_code:
-            return {
-                "compilation_success": False,
-                "stage": "rust_compilation",
-                "error": "Simulated compilation error: syntax invalid",
-                "pass_rate": 0.0,
-                "passed_tests": 0,
-                "total_tests": total
-            }
-
-        passed = 0
-        divergences = []
-
-        # Emulate reference C string reverse semantics vs Rust candidate
-        is_weak = "WEAK MINER" in rust_code or "skips null byte" in rust_code
-        is_cheater = "unsafe" in rust_code or "CHEATER MINER" in rust_code
-
-        for inp in test_inputs:
-            inp_str = str(inp)
-            
-            # Reference C behavior for string reverser:
-            # In standard C, strings are null-terminated (`\0`). Characters after `\0` are ignored,
-            # or `\0` truncates the string.
-            if "\x00" in inp_str:
-                c_part = inp_str.split("\x00")[0]
-                c_out = c_part[::-1]
-            else:
-                c_out = inp_str[::-1]
-
-            # Candidate Rust behavior:
-            if is_weak:
-                # Weak miner fails on boundary conditions: null bytes, unicode, punctuation, or odd lengths
-                has_punct_or_ws = any(c in "!@#$%^&*() \t\n" for c in inp_str)
-                if "\x00" in inp_str or any(ord(c) > 127 for c in inp_str) or len(inp_str) == 0 or has_punct_or_ws:
-                    # Divergence: corrupts or skips characters
-                    rust_out = inp_str.replace("\x00", "").replace(" ", "")[::-1]
-                    if rust_out != c_out:
-                        divergences.append({
-                            "input": repr(inp_str),
-                            "c_stdout": c_out,
-                            "rust_stdout": rust_out,
-                            "reason": "Weak translation diverged on boundary edge cases"
-                        })
-                        continue
-                rust_out = inp_str[::-1]
-            elif is_cheater:
-                # Cheater produces output but violates safety
-                rust_out = c_out
-            else:
-                # Honest miner matches C semantics properly
-                rust_out = c_out
-
-            if rust_out == c_out:
-                passed += 1
-            else:
-                divergences.append({
-                    "input": repr(inp_str),
-                    "c_stdout": c_out,
-                    "rust_stdout": rust_out,
-                    "reason": "Output mismatch"
-                })
-
-        pass_rate = passed / total
-        return {
-            "compilation_success": True,
-            "pass_rate": pass_rate,
-            "passed_tests": passed,
-            "total_tests": total,
-            "divergences": divergences
-        }
+            shutil.rmtree(c_temp_dir, ignore_errors=True)
+            shutil.rmtree(rs_temp_dir, ignore_errors=True)

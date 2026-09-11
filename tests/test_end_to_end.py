@@ -1,6 +1,12 @@
 """
-Master End-to-End Test Suite for C-to-Safe-Rust Subnet (tests/test_end_to_end.py)
-Validates all phases, static gate hard stops, sandbox fuzzing, breaker scoring, and weight emissions.
+Master End-to-End Test Suite for Aegis Subnet (tests/test_end_to_end.py)
+Validates all phases:
+1. Static analysis pre-filters and rustc -F unsafe_code gate
+2. Cubed pass-rate formula and 50% anti-collusion rule
+3. Secret sanitizer-verified hidden test generation
+4. Adversarial breaker fuzzer raw byte synthesis
+5. Full round execution across honest, weak, cheater, and breaker neurons
+6. On-chain weight emission and JSONL audit logging
 """
 
 import sys
@@ -15,23 +21,29 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
+os.environ["AEGIS_ALLOW_UNSANDBOXED"] = "1"
+os.environ["AEGIS_MOCK"] = "1"
+
+
 import substrate as bt
 from protocol import TranslationSynapse, BreakerSynapse
-from dataset.hidden_tests import generate_hidden_tests
+from dataset.tasks import sample_task
+from dataset.hidden_tests import generate_sanitizer_verified_hidden_tests
 from sandbox.sandbox_runner import SandboxRunner
 from neurons.miner_translator import TranslatorMiner, parse_args as parse_tr_args
 from neurons.miner_breaker import BreakerMiner, parse_args as parse_br_args
-from neurons.validator import Validator, static_analysis_gate, calculate_score, parse_args as parse_val_args
+from neurons.validator import Validator, static_analysis_gate, parse_args as parse_val_args
+from neurons.scoring import calculate_translator_pre_score, score_round
 
 
-class TestC2RustSubnet(unittest.TestCase):
+class TestAegisSubnetEndToEnd(unittest.TestCase):
 
     def test_01_static_analysis_hard_gates(self):
         """Verify strict static gates block unsafe, process commands, libc, and pass safe code."""
         unsafe_code = 'pub fn run() { unsafe { std::ptr::null::<i32>(); } }'
         passed, reason = static_analysis_gate(unsafe_code)
         self.assertFalse(passed)
-        self.assertIn("Unsafe", reason)
+        self.assertIn("unsafe", reason.lower())
 
         proc_code = 'pub fn run() { std::process::Command::new("gcc"); }'
         passed, reason = static_analysis_gate(proc_code)
@@ -43,77 +55,91 @@ class TestC2RustSubnet(unittest.TestCase):
         self.assertFalse(passed)
         self.assertIn("libc", reason.lower())
 
-        safe_code = '#![forbid(unsafe_code)]\npub fn run(s: &str) -> String { s.chars().rev().collect() }'
+        safe_code = '#![forbid(unsafe_code)]\nfn main() {}'
         passed, reason = static_analysis_gate(safe_code)
         self.assertTrue(passed)
         self.assertIsNone(reason)
 
     def test_02_scoring_formula(self):
-        """Verify squared pass-rate formula, safety penalty zeroing, and speed bonus cap."""
-        # Unsafe code hard reject
-        score, _ = calculate_score(pass_rate=1.0, has_unsafe=True, actual_time=1.0)
+        """Verify cubed pass-rate formula pre_t = (passed / total) ** 3."""
+        # Unsafe code -> 0.0
+        score = calculate_translator_pre_score(passed_hidden=10, total_hidden=10, compile_success=True, gate_success=False)
         self.assertEqual(score, 0.0)
 
-        # Perfect safe fast pass: (1.0)^2 * 1.0 * min(1.2, 1.0 + (10 - 2)/10 * 0.2) = 1.16
-        score, bd = calculate_score(pass_rate=1.0, has_unsafe=False, actual_time=2.0, max_time=10.0)
-        self.assertGreater(score, 1.0)
-        self.assertLessEqual(score, 1.20)
+        # Perfect safe pass (10/10) -> 1.0
+        score = calculate_translator_pre_score(passed_hidden=10, total_hidden=10, compile_success=True, gate_success=True)
+        self.assertEqual(score, 1.0)
 
-        # Weak translation: pass_rate = 0.5 -> (0.5)^2 * 1.0 * 1.0 = 0.25
-        score, _ = calculate_score(pass_rate=0.5, has_unsafe=False, actual_time=10.0, max_time=10.0)
-        self.assertEqual(score, 0.25)
+        # 50% pass rate -> (0.5)^3 = 0.125
+        score = calculate_translator_pre_score(passed_hidden=5, total_hidden=10, compile_success=True, gate_success=True)
+        self.assertEqual(score, 0.125)
 
     def test_03_hidden_test_synthesis(self):
         """Verify generation of property-based and boundary hidden tests."""
-        suite = generate_hidden_tests(count=50, seed=123)
-        self.assertEqual(len(suite), 50)
-        self.assertIn("", suite)
-        self.assertIn("Hello World", suite)
+        runner = SandboxRunner()
+        task = sample_task("reverse_bytes", seed=123)
+        suite = generate_sanitizer_verified_hidden_tests(task.c_code, runner, count=15, seed=123)
+        self.assertEqual(len(suite), 15)
+        self.assertIn(b"", suite)
+        self.assertIn(b"\x00", suite)
 
     def test_04_adversarial_breaker_generation(self):
-        """Verify breaker miner generates adversarial edge cases."""
-        b_args = parse_br_args([])
+        """Verify breaker miner generates adversarial raw byte edge cases."""
+        b_args = parse_br_args(["--mock"])
         b_args.wallet_hotkey = "test_breaker_unit"
         breaker = BreakerMiner(b_args)
         
-        c_sample = "void rev(char *s) {}"
-        rs_sample = "pub fn rev(s: &str) {}"
-        syn = BreakerSynapse(c_code=c_sample, rust_code=rs_sample, function_name="rev", num_inputs_requested=10)
+        task = sample_task("reverse_bytes", seed=42)
+        syn = BreakerSynapse(c_code=task.c_code, rust_code=task.weak_rust, task_name=task.task_name, num_inputs_requested=10)
         resp = breaker.forward(syn)
+        raw = resp.get_raw_inputs()
         
-        self.assertEqual(len(resp.test_inputs), 10)
-        self.assertIn("\x00", resp.test_inputs)
+        self.assertGreaterEqual(len(raw), 5)
+        self.assertIn(b"\x00", raw)
 
     def test_05_validator_round_with_miners(self):
-        """Verify full round execution, static gate slashing, and emission assignment."""
-        v_args = parse_val_args([])
+        """Verify full round execution across Honest, Weak, Cheater, and Breaker."""
+        v_args = parse_val_args(["--mock"])
         v_args.wallet_hotkey = "unit_val"
+        v_args.no_docker = True
         val = Validator(v_args)
 
-        # Spawn honest and cheater miners
-        m_h_args = parse_tr_args([])
+        # Spawn honest, weak, and cheater miners
+        m_h_args = parse_tr_args(["--mock"])
         m_h_args.wallet_hotkey = "unit_honest"
         m_h_args.mode = "honest"
         m_honest = TranslatorMiner(m_h_args).run()
 
-        m_c_args = parse_tr_args([])
+        m_w_args = parse_tr_args(["--mock"])
+        m_w_args.wallet_hotkey = "unit_weak"
+        m_w_args.mode = "weak"
+        m_weak = TranslatorMiner(m_w_args).run()
+
+        m_c_args = parse_tr_args(["--mock"])
         m_c_args.wallet_hotkey = "unit_cheater"
         m_c_args.mode = "cheater"
         m_cheater = TranslatorMiner(m_c_args).run()
 
+        b_args = parse_br_args(["--mock"])
+        b_args.wallet_hotkey = "unit_breaker"
+        m_breaker = BreakerMiner(b_args).run()
+
         res = val.run_validation_round(
-            translator_axons=[m_honest.axon, m_cheater.axon],
-            breaker_axons=None,
-            num_tests=20
+            translator_axons=[m_honest.axon, m_weak.axon, m_cheater.axon],
+            breaker_axons=[m_breaker.axon],
+            num_tests=15,
+            task_name="rle_encode"
         )
 
-        round_results = res["round_results"]
-        honest_res = next(r for r in round_results if r["hotkey"] == "unit_honest")
-        cheater_res = next(r for r in round_results if r["hotkey"] == "unit_cheater")
-
-        self.assertGreater(honest_res["score"], 1.0)
-        self.assertEqual(cheater_res["score"], 0.0)
-        self.assertEqual(cheater_res["status"], "REJECTED_STATIC_GATE")
+        scores = res["round_scores"]
+        # Honest should score high (1.0)
+        self.assertAlmostEqual(scores["unit_honest"], 1.0, places=2)
+        # Cheater rejected -> 0.0
+        self.assertEqual(scores["unit_cheater"], 0.0)
+        # Breaker breaks weak -> breaker earns bounty > 0
+        self.assertGreater(scores["unit_breaker"], 0.0)
+        # Weak broken -> score = 0.0
+        self.assertEqual(scores["unit_weak"], 0.0)
 
 
 if __name__ == "__main__":

@@ -27,7 +27,7 @@ def main():
     parser.add_argument("--mode", type=str, default="honest", choices=["honest", "weak", "cheater", "llm"],
                         help="Translator mode (honest, weak, cheater, llm)")
     parser.add_argument("--strategy", type=str, default="adversarial_fuzz", help="Breaker strategy")
-    parser.add_argument("--local_repair", action="store_true", default=True, help="Enable repair loop")
+    parser.add_argument("--mock", action="store_true", default=False, help="Use mock substrate")
     
     args = parser.parse_args()
     
@@ -37,7 +37,9 @@ def main():
         miner = TranslatorMiner(args)
         
     miner.run()
+    miner.serve_forever()
 
 
 if __name__ == "__main__":
     main()
+

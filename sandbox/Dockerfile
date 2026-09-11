@@ -2,12 +2,13 @@
 # Enforces --network none and non-root execution inside isolated container
 FROM rust:1.80-slim-bookworm
 
-# Install GCC and build-essential for C compilation
+# Install GCC and sanitizers for C compilation
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libc6-dev \
+    libasan8 \
+    libubsan1 \
     make \
-    valgrind \
     python3 \
     && rm -rf /var/lib/apt/lists/*
 

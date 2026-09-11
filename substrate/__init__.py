@@ -30,7 +30,10 @@ try:
 except Exception:
     _REAL_BITTENSOR = False
 
-if _REAL_BITTENSOR and not os.environ.get("FORCE_MOCK_BITTENSOR"):
+# Check if mock mode is explicitly requested
+_ALLOW_MOCK = ("--mock" in sys.argv) or (os.environ.get("AEGIS_MOCK") == "1") or (os.environ.get("FORCE_MOCK_BITTENSOR") == "1")
+
+if _REAL_BITTENSOR and not ("--mock" in sys.argv) and not os.environ.get("FORCE_MOCK_BITTENSOR"):
     Synapse = bt.Synapse
     axon = bt.axon
     dendrite = bt.dendrite
@@ -38,11 +41,11 @@ if _REAL_BITTENSOR and not os.environ.get("FORCE_MOCK_BITTENSOR"):
     wallet = bt.wallet
     metagraph = bt.metagraph
     logging = bt.logging
-    Keypair = bt.Keypair
+    Keypair = getattr(bt, "Keypair", None)
     IS_MOCK = False
-else:
+elif _ALLOW_MOCK:
     IS_MOCK = True
-    logger.info("[substrate] Initializing high-fidelity Mock Bittensor substrate engine.")
+    logger.info("[substrate] Initializing high-fidelity Mock Bittensor substrate engine (--mock enabled).")
 
     class TerminalInfo(BaseModel):
         status_code: int = 200
@@ -58,6 +61,10 @@ else:
 
         class Config:
             arbitrary_types_allowed = True
+
+        def deserialize(self) -> Any:
+            return self
+
 
         def deserialize(self) -> Any:
             return self
@@ -255,3 +262,10 @@ else:
 
     def logging():
         return logger
+else:
+    raise ImportError(
+        "Real 'bittensor' package is required for live/testnet operation. "
+        "Install with `pip install bittensor` or specify `--mock` (or set `AEGIS_MOCK=1`) "
+        "to run the local mock substrate simulation."
+    )
+

@@ -1,69 +1,124 @@
 """
-Hidden Test Generator for Differential Fuzzing (dataset/hidden_tests.py)
-Utilizes Hypothesis and property-based synthesis to produce randomized,
-adversarial, and boundary test inputs for differential C vs Rust verification.
+Secret Hidden Test Generator for Differential Verification (dataset/hidden_tests.py)
+Produces cryptographically seeded, boundary-dense raw byte test suites.
+Pre-checks every input against the AddressSanitizer and UndefinedBehaviorSanitizer
+reference binary (ref_san) to ensure 100% UB-free differential testing.
 """
 
+import os
 import random
-import string
-from typing import List
-from hypothesis import strategies as st
+import secrets
+from typing import List, Optional, Union
 
 
-def generate_hidden_tests(count: int = 50, seed: int = 42) -> List[str]:
+MAX_INPUT_SIZE = 16 * 1024  # 16 KB input size limit
+
+
+def generate_raw_hidden_tests(count: int = 40, seed: Optional[int] = None) -> List[bytes]:
     """
-    Generates deterministic, cryptographically randomized test suites
-    with hard boundary cases embedded.
+    Generates deterministic or cryptographically random raw byte edge-cases.
+    Seed is generated per validator round using secrets.randbits(64).
     """
+    if seed is None:
+        seed = secrets.randbits(64)
+
     rng = random.Random(seed)
-    tests = []
+    tests: List[bytes] = []
 
-    # 1. Mandatory hard edge cases
-    tests.append("")                              # Empty string
-    tests.append("a")                             # Single char
-    tests.append("ab")                            # Even length
-    tests.append("abc")                           # Odd length
-    tests.append("   ")                           # Whitespace only
-    tests.append("\t\r\n")                        # Escaped whitespaces
-    tests.append("!@#$%^&*()_+-=[]{}|;':\",./<>?") # Punctuation set
-    tests.append("Hello World")                   # Standard ASCII with space
-    tests.append("racecar")                       # Palindrome
-    tests.append("A" * 256)                       # 256-byte buffer boundary
-    tests.append("B" * 1024)                      # 1KB stress input
-    tests.append("Hello\x00World")                # Embedded null byte
-    tests.append("🦀 Rust vs C 🚀")                # Multi-byte UTF-8 emoji
-    tests.append("áéíóúñÁÉÍÓÚÑ")                  # Accented characters
-    tests.append("0123456789")                    # Numeric sequence
+    # 1. Mandatory boundary edge cases
+    tests.append(b"")                                      # Empty input
+    tests.append(b"\x00")                                  # Single null byte
+    tests.append(b"\xff")                                  # Single max byte
+    tests.append(b"a")                                     # Single ASCII char
+    tests.append(b"\n")                                    # Single newline
+    tests.append(b"\r\n")                                  # Windows CRLF
+    tests.append(b"\t\r\n ")                               # Whitespaces
+    tests.append(b"\x00" * 16)                             # Run of nulls
+    tests.append(b"\xff" * 16)                             # Run of 0xFF
+    tests.append(b"\x00" * 300)                            # Run > 255 bytes (tests RLE overflow)
+    tests.append(b"\xff" * 300)                            # Large run of 0xFF
+    tests.append(b"Hello\x00World\x00")                    # Embedded null bytes
+    tests.append(b"!@#$%^&*()_+-=[]{}|;':\",./<>?")        # Complex ASCII symbols
+    tests.append(b"\xff\xfe\xfd\x80\x81\x82")              # Invalid UTF-8 sequence
+    tests.append("🦀 Rust vs C 🚀".encode("utf-8"))        # Valid multi-byte UTF-8 emoji
+    tests.append("áéíóúñÁÉÍÓÚÑ".encode("utf-8"))          # Accented UTF-8
+    tests.append(b"Line 1\r\nLine 2\nLine 3 (no nl)")      # Mixed line endings
+    tests.append(b"A" * 255)                               # 255 boundary
+    tests.append(b"B" * 256)                               # 256 boundary
+    tests.append(b"C" * 1024)                              # 1 KB buffer boundary
+    tests.append(b"\xaa\x55" * 64)                         # Alternating bit patterns
+    tests.append(b"0123456789" * 20)                       # Numeric sequence
 
-    # 2. Hypothesis-driven property generation for remainder
-    remaining = max(0, count - len(tests))
-    ascii_strategy = st.text(alphabet=st.characters(blacklist_categories=('Cs',)), max_size=100)
-    
-    # Sample randomized inputs
-    for i in range(remaining):
-        mode = rng.randint(0, 3)
+    # 2. Seeded random bytes and fuzz inputs
+    patterns = [
+        b"\x00\x01\x02\x03",
+        b"abc\n123\n",
+        b"\xfe\xff\x00\x01",
+        b"\r\n\r\n",
+        b" \t \t \n"
+    ]
+
+    while len(tests) < count:
+        mode = rng.randint(0, 4)
         if mode == 0:
-            # Printable ASCII
-            length = rng.randint(5, 50)
-            s = "".join(rng.choice(string.printable) for _ in range(length))
-            tests.append(s)
+            # Random raw bytes
+            length = rng.randint(1, 256)
+            data = bytes(rng.randint(0, 255) for _ in range(length))
+            tests.append(data)
         elif mode == 1:
-            # Alphabetic words
-            words = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "omega"]
-            tests.append(" ".join(rng.choices(words, k=rng.randint(2, 6))))
+            # Pattern repetition
+            pat = rng.choice(patterns)
+            reps = rng.randint(2, 30)
+            tests.append(pat * reps)
         elif mode == 2:
-            # Repeating patterns
-            pattern = rng.choice(["abc", "xy", "01", "!?", "<>"])
-            tests.append(pattern * rng.randint(5, 30))
+            # High bytes / non-ASCII
+            length = rng.randint(4, 64)
+            data = bytes(rng.randint(128, 255) for _ in range(length))
+            tests.append(data)
+        elif mode == 3:
+            # Lines of text
+            lines = [f"line_{rng.randint(0, 1000)}" for _ in range(rng.randint(1, 10))]
+            tests.append("\n".join(lines).encode("utf-8"))
         else:
-            # Numerical strings
-            tests.append(str(rng.randint(-1000000, 1000000)))
+            # Alternating nulls and ASCII
+            chars = [rng.choice([b"\x00", b"x", b" ", b"\n"]) for _ in range(rng.randint(5, 50))]
+            tests.append(b"".join(chars))
 
-    return tests[:count]
+    # Enforce max input size
+    return [t[:MAX_INPUT_SIZE] for t in tests[:count]]
+
+
+def generate_sanitizer_verified_hidden_tests(
+    c_code: str,
+    sandbox_runner,
+    count: int = 30,
+    seed: Optional[int] = None
+) -> List[bytes]:
+    """
+    Generates hidden test suite and verifies each candidate on ref_san (ASan+UBSan).
+    Any input that triggers sanitizer reports or non-zero exits on C reference is dropped.
+    """
+    if seed is None:
+        seed = secrets.randbits(64)
+
+    # Generate extra candidates to allow dropping invalid ones
+    candidates = generate_raw_hidden_tests(count=count + 15, seed=seed)
+
+    # Run sanitizer check
+    san_results = sandbox_runner.run_sanitizer_precheck(c_code, candidates, timeout=2.0)
+
+    clean_tests: List[bytes] = []
+    for cand, res in zip(candidates, san_results):
+        if res.get("is_clean", False):
+            clean_tests.append(cand)
+            if len(clean_tests) >= count:
+                break
+
+    return clean_tests
 
 
 if __name__ == "__main__":
-    test_cases = generate_hidden_tests(count=20)
-    print(f"Generated {len(test_cases)} sample hidden tests:")
-    for idx, t in enumerate(test_cases[:10]):
-        print(f"[{idx+1:02d}] {repr(t)}")
+    cases = generate_raw_hidden_tests(count=10, seed=42)
+    print(f"Generated {len(cases)} raw byte test cases:")
+    for idx, c in enumerate(cases):
+        print(f"[{idx+1:02d}] len={len(c)}: {repr(c[:40])}")

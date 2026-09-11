@@ -8,6 +8,8 @@ env/
 venv/
 .venv/
 *.log
+*.jsonl
+
 
 # C / Rust build artifacts
 target/
