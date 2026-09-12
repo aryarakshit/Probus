@@ -313,15 +313,24 @@ class SandboxRunner:
                 exit_code = res.get("exit_code", 0)
                 san_trig = res.get("sanitizer_triggered", False)
 
-                is_clean = (exit_code == 0) and (not timed_out) and (not san_trig)
+                # Valid == no sanitizer diagnostic, no crash signal, no timeout. A programmatic
+                # non-zero exit (0..127) is a legitimate behaviour the translation must reproduce.
+                crashed = not (0 <= exit_code <= 127)
+                infra = (exit_code == -1) and not timed_out
+                is_clean = (not timed_out) and (not san_trig) and (not crashed)
                 reason = "clean"
-                if timed_out:
+                if infra:
+                    reason = "harness could not launch the reference binary"
+                elif timed_out:
                     reason = "timeout"
-                elif san_trig or exit_code != 0:
-                    reason = f"sanitizer/crash (exit={exit_code}): {stderr_bytes[:150].decode(errors='replace')}"
+                elif san_trig:
+                    reason = f"sanitizer (exit={exit_code}): {stderr_bytes[:150].decode(errors='replace')}"
+                elif crashed:
+                    reason = f"crash signal (exit={exit_code})"
 
                 evaluated.append({
                     "is_clean": is_clean,
+                    "infra_error": infra,
                     "reason": reason,
                     "exit_code": exit_code,
                     "timed_out": timed_out
@@ -405,6 +414,7 @@ class SandboxRunner:
             # 5. Compare byte outputs and exit codes
             passed = 0
             divergences = []
+            infra_errors = 0
 
             for idx, (c_res, rs_res) in enumerate(zip(c_results, rs_results)):
                 c_out = base64.b64decode(c_res.get("stdout_b64", ""))
@@ -413,31 +423,47 @@ class SandboxRunner:
                 rs_exit = rs_res.get("exit_code", -1)
                 rs_timed_out = rs_res.get("timed_out", False)
 
+                # exit -1 means the harness could not launch the binary at all. That is our
+                # problem, not the miner's: never count it as a pass or as a divergence.
+                if c_exit == -1 or (rs_exit == -1 and not rs_timed_out):
+                    infra_errors += 1
+                    continue
+
                 # Pass iff identical stdout bytes AND identical exit code
                 if (c_out == rs_out) and (c_exit == rs_exit) and (not rs_timed_out):
                     passed += 1
                 else:
                     inp_raw = test_inputs[idx]
                     inp_bytes = inp_raw.encode("utf-8") if isinstance(inp_raw, str) else bytes(inp_raw)
+                    reason = ("rust timeout" if rs_timed_out else
+                              "rust panic" if rs_exit == 101 and c_exit != 101 else
+                              "exit code mismatch" if c_exit != rs_exit else "stdout mismatch")
                     divergences.append({
                         "index": idx,
+                        "input_b64": base64.b64encode(inp_bytes).decode("ascii"),
                         "input_repr": repr(inp_bytes[:64]),
                         "input_len": len(inp_bytes),
+                        "c_stdout_b64": base64.b64encode(c_out[:256]).decode("ascii"),
+                        "rust_stdout_b64": base64.b64encode(rs_out[:256]).decode("ascii"),
                         "c_stdout_len": len(c_out),
                         "rust_stdout_len": len(rs_out),
                         "c_exit": c_exit,
                         "rust_exit": rs_exit,
                         "rust_timed_out": rs_timed_out,
-                        "reason": "exit code mismatch" if c_exit != rs_exit else "stdout mismatch"
+                        "reason": reason
                     })
 
-            pass_rate = passed / total if total > 0 else 0.0
+            scored = total - infra_errors
+            pass_rate = passed / scored if scored > 0 else 0.0
+            if infra_errors:
+                logger.warning(f"{infra_errors}/{total} executions failed to launch; excluded from scoring")
 
             return {
                 "compilation_success": True,
                 "pass_rate": pass_rate,
                 "passed_tests": passed,
-                "total_tests": total,
+                "total_tests": scored,
+                "infra_errors": infra_errors,
                 "divergences": divergences
             }
 

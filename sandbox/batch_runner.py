@@ -73,12 +73,22 @@ def run_batch(
         exit_code = -1
 
         try:
-            proc = subprocess.Popen(
-                [binary_path],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
-            )
+            proc = None
+            # A freshly linked binary can be briefly locked by AV / indexing on Windows;
+            # retry the launch a few times before declaring an infrastructure error.
+            for attempt in range(4):
+                try:
+                    proc = subprocess.Popen(
+                        [binary_path],
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE
+                    )
+                    break
+                except (PermissionError, OSError):
+                    if attempt == 3:
+                        raise
+                    time.sleep(0.25 * (attempt + 1))
             try:
                 stdout_buf, stderr_buf = proc.communicate(input=test_input, timeout=per_test_timeout)
                 exit_code = proc.returncode
@@ -93,6 +103,8 @@ def run_batch(
         except Exception as e:
             stderr_buf = f"Execution error: {str(e)}".encode("utf-8", errors="replace")
             exit_code = -1
+            if os.environ.get("AEGIS_DEBUG_EXEC"):
+                sys.stderr.write(f"[batch_runner] {binary_path}: {e!r}\n")
 
         elapsed = time.perf_counter() - t0
 

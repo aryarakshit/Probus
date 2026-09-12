@@ -86,6 +86,8 @@ def score_round(
         for (b_hk, raw_inp), san_res in zip(input_mapping, san_results):
             if san_res.get("is_clean", False):
                 valid_inputs_by_breaker[b_hk].append(raw_inp)
+            elif san_res.get("infra_error", False):
+                continue  # our harness failed, not the breaker: neither credit nor penalty
             else:
                 invalid_count_by_breaker[b_hk] += 1
 
@@ -113,7 +115,10 @@ def score_round(
             divergences = test_res.get("divergences", [])
             if divergences:
                 breaker_hits[t_hk].add(b_hk)
-                breaking_inputs_record[t_hk].extend(divergences)
+                for d in divergences:
+                    d = dict(d)
+                    d["breaker"] = b_hk
+                    breaking_inputs_record[t_hk].append(d)
 
     # 3. Apply the 50% Anti-Collusion Bounty Rule
     # If translator t is broken by set B_t:
@@ -156,12 +161,16 @@ def score_round(
         b_score = final_breaker_scores.get(hk, 0.0)
         round_scores[hk] = round(t_score + b_score, 6)
 
+    for t_hk in breaking_inputs_record:
+        breaking_inputs_record[t_hk].sort(key=lambda d: (d.get("input_len", 0), d.get("input_repr", "")))
+
     return {
         "round_scores": round_scores,
         "translator_scores": final_translator_scores,
         "breaker_scores": final_breaker_scores,
-        "breaker_hits": {k: list(v) for k, v in breaker_hits.items()},
+        "breaker_hits": {k: sorted(v) for k, v in breaker_hits.items()},
         "invalid_counts": invalid_count_by_breaker,
+        "valid_counts": {k: len(v) for k, v in valid_inputs_by_breaker.items()},
         "divergences": breaking_inputs_record
     }
 
