@@ -1,164 +1,130 @@
 """
-Live Subnet Demo Orchestrator (scripts/run_demo.py)
-Spawns the local validator and 4 distinct miner archetypes:
-1. Miner_Honest: 100% Safe Rust with whole-program fn main()
-2. Miner_Weak: Flawed translator with edge-case bugs
-3. Miner_Cheater: Malicious miner using unsafe pointer hacks
-4. Miner_Breaker: Adversarial fuzzer seeking edge-case divergences
+Live subnet demo (scripts/run_demo.py)
 
-Executes genuine validation rounds with dynamic tasks and secret hidden tests.
-Prints live, unscripted evaluation metrics directly from execution results.
+Spins up one validator and four neurons on the mock substrate and runs real
+validation rounds - real compilers, real sanitizers, real differential fuzzing:
+
+  translator_llm      the actual miner: provider-agnostic LLM translation with a
+                      self-fuzzing repair loop. Uses whatever credentials are in
+                      the environment; with none, it replays recorded model output
+                      from dataset/llm_replay/ (see scripts/record_translations.py).
+  translator_weak     benchmark fixture with a realistic porting bug
+  translator_cheater  benchmark fixture that uses `unsafe`
+  breaker             differential fuzzer hunting for bounty
+
+Nothing printed here is scripted: every number comes out of the round.
+
+    python scripts/run_demo.py --rounds 3
+    python scripts/run_demo.py --task utf8_validate --seed 7
 """
 
 import sys
 import os
 import time
+import base64
 import argparse
-from typing import Dict, Any
 
-# Ensure project root is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
-if hasattr(sys.stderr, "reconfigure"):
-    sys.stderr.reconfigure(encoding="utf-8")
 
-import substrate as bt
+os.environ.setdefault("AEGIS_ALLOW_UNSANDBOXED", "1")
+os.environ.setdefault("AEGIS_MOCK", "1")
+
 from neurons.miner_translator import TranslatorMiner, parse_args as parse_tr_args
 from neurons.miner_breaker import BreakerMiner, parse_args as parse_br_args
 from neurons.validator import Validator, parse_args as parse_val_args
+from neurons.llm import LLMClient
+from dataset.tasks import list_tasks, TASK_DESCRIPTIONS
+
+REPLAY_SEEDS = [101, 202, 303]   # the seeds scripts/record_translations.py records
 
 
-def run_hackathon_demo(num_rounds: int = 3, allow_unsandboxed: bool = True):
-    print("=" * 80)
-    print(" BITTENSOR C-TO-SAFE-RUST SUBNET: LIVE ADVERSARIAL VALIDATION DEMO")
-    print("=" * 80)
-    
-    if allow_unsandboxed:
-        os.environ["AEGIS_ALLOW_UNSANDBOXED"] = "1"
+def banner(text: str):
+    print("\n" + "=" * 88)
+    print(f" {text}")
+    print("=" * 88)
 
-    # 1. Setup Validator
-    v_args = parse_val_args([])
-    v_args.wallet_hotkey = "val_prime"
-    v_args.no_docker = allow_unsandboxed
-    v_args.mock = True
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--rounds", type=int, default=3)
+    ap.add_argument("--task", type=str, default=None, help="one of: " + ", ".join(list_tasks()))
+    ap.add_argument("--seed", type=int, default=None)
+    ap.add_argument("--tests", type=int, default=20)
+    ap.add_argument("--fuzz_seconds", type=float, default=8.0)
+    ap.add_argument("--self_fuzz_seconds", type=float, default=4.0)
+    ap.add_argument("--docker", action="store_true", help="use the Docker sandbox instead of the host toolchain")
+    args = ap.parse_args()
+
+    banner("AEGIS SUBNET - LIVE ADVERSARIAL C-TO-SAFE-RUST VALIDATION")
+    probe = LLMClient()
+    if probe.provider:
+        print(f"[LLM] live provider: {probe.describe()}")
+    else:
+        print("[LLM] no credentials found -> translator_llm replays recorded model output from dataset/llm_replay/")
+        print("      (set ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY / OLLAMA_HOST for a live run)")
+
+    v_args = parse_val_args(["--mock"] + ([] if args.docker else ["--no_docker"]))
+    v_args.wallet_hotkey = "validator"
     validator = Validator(v_args)
-    
-    # 2. Setup 4 Miner Archetypes
-    print("\n[SETUP] Initializing 4 Distinct Miner Archetypes on Subnet...")
 
-    # Miner 1: Honest
-    m1_args = parse_tr_args([])
-    m1_args.wallet_hotkey = "miner_translator_honest"
-    m1_args.mode = "honest"
-    m1_args.mock = True
-    miner_honest = TranslatorMiner(m1_args)
-    miner_honest.run()
+    def mk_tr(hotkey, mode, extra=()):
+        a = parse_tr_args(["--mock", "--mode", mode, "--wallet_hotkey", hotkey, *extra])
+        return TranslatorMiner(a).run()
 
-    # Miner 2: Weak
-    m2_args = parse_tr_args([])
-    m2_args.wallet_hotkey = "miner_translator_weak"
-    m2_args.mode = "weak"
-    m2_args.mock = True
-    miner_weak = TranslatorMiner(m2_args)
-    miner_weak.run()
+    m_llm = mk_tr("translator_llm", "llm", ["--self_fuzz_seconds", str(args.self_fuzz_seconds)])
+    m_weak = mk_tr("translator_weak", "weak")
+    m_cheat = mk_tr("translator_cheater", "cheater")
+    b_args = parse_br_args(["--mock", "--wallet_hotkey", "breaker", "--fuzz_seconds", str(args.fuzz_seconds)])
+    m_break = BreakerMiner(b_args).run()
 
-    # Miner 3: Cheater
-    m3_args = parse_tr_args([])
-    m3_args.wallet_hotkey = "miner_translator_cheater"
-    m3_args.mode = "cheater"
-    m3_args.mock = True
-    miner_cheater = TranslatorMiner(m3_args)
-    miner_cheater.run()
+    translators = [m_llm.axon, m_weak.axon, m_cheat.axon]
+    breakers = [m_break.axon]
+    print(f"\n[SETUP] 3 translators + 1 breaker online. Task pool: {len(list_tasks())} programs.")
 
-    # Miner 4: Breaker
-    m4_args = parse_br_args([])
-    m4_args.wallet_hotkey = "miner_breaker"
-    m4_args.mock = True
-    miner_breaker = BreakerMiner(m4_args)
-    miner_breaker.run()
-
-    # Register axons with validator query lists
-    translator_axons = [
-        miner_honest.axon,
-        miner_weak.axon,
-        miner_cheater.axon
-    ]
-    breaker_axons = [
-        miner_breaker.axon
-    ]
-
-    print(f"[SETUP] Subnet online with 3 Translators and 1 Breaker. Beginning {num_rounds} validation rounds.\n")
-
-    cumulative_scores = {
-        "miner_translator_honest": 0.0,
-        "miner_translator_weak": 0.0,
-        "miner_translator_cheater": 0.0,
-        "miner_breaker": 0.0
-    }
-    round_records = []
-
-    for round_idx in range(1, num_rounds + 1):
-        print("-" * 80)
-        print(f"[ROUND {round_idx}/{num_rounds}] Executing validation cycle...")
-        
+    totals = {}
+    for r in range(1, args.rounds + 1):
+        seed = args.seed if args.seed is not None else (None if probe.provider else REPLAY_SEEDS[(r - 1) % len(REPLAY_SEEDS)])
+        banner(f"ROUND {r}/{args.rounds}")
         t0 = time.time()
-        result = validator.run_validation_round(
-            translator_axons=translator_axons,
-            breaker_axons=breaker_axons,
-            num_tests=20
-        )
-        elapsed = time.time() - t0
+        res = validator.run_validation_round(translators, breakers, num_tests=args.tests, task_name=args.task, seed=seed)
+        entry = res["log_entry"]
+        print(f"\n[ROUND {r}] task={entry['task_name']} {entry['constants']}  "
+              f"hidden_tests={entry['hidden_tests']}  {time.time() - t0:.1f}s")
+        print(f"  {TASK_DESCRIPTIONS.get(entry['task_name'], '')}")
+        print(f"\n  {'neuron':<20} {'gate':<6} {'rustc':<6} {'hidden':<9} {'pre_t':<8} {'final':<8} verdict")
+        for hk, ev in entry["translator_evals"].items():
+            gate = "PASS" if ev["gate_success"] else "REJECT"
+            comp = "ok" if ev["compile_success"] else ("-" if not ev["gate_success"] else "FAIL")
+            hidden = f"{ev['passed_hidden']}/{ev['total_hidden']}" if ev["compile_success"] else "-"
+            verdict = ev.get("reject_reason") or ""
+            if ev["broken_by"]:
+                rep = ev["reproducers"][0]
+                verdict = f"BROKEN by {ev['broken_by']} - reproducer {rep['input_len']}B {rep['input_repr']} ({rep['reason']})"
+            elif ev["compile_success"] and ev["final_score"] > 0:
+                verdict = f"survived ({ev['attempts']} attempt(s); {ev['miner_notes']})"
+            elif not ev["compile_success"] and ev["gate_success"]:
+                verdict = "rustc: " + (ev.get("compile_error") or "")[:60]
+            print(f"  {hk:<20} {gate:<6} {comp:<6} {hidden:<9} {ev['pre_t']:<8.4f} {ev['final_score']:<8.4f} {verdict}")
+        for hk, ev in entry["breaker_evals"].items():
+            print(f"  {hk:<20} {'-':<6} {'-':<6} {ev['valid_inputs']:>3} valid  {'':<8} {ev['final_score']:<8.4f} bounty")
+        print(f"\n  weights -> {entry['normalized_weights']}")
+        led = entry.get("ledger", {})
+        if "root" in led:
+            print(f"  ledger  -> height {led['height']}  root {led['root'][:20]}…  prev {led['prev_root'][:12]}…")
+        for hk, sc in entry["round_scores"].items():
+            totals[hk] = totals.get(hk, 0.0) + sc
 
-        task_name = result["task_name"]
-        scores = result["round_scores"]
-        weights = result["weights"]
-
-        print(f"[ROUND {round_idx} COMPLETE] Task: {task_name} in {elapsed:.2f}s")
-        for hk, sc in scores.items():
-            cumulative_scores[hk] = cumulative_scores.get(hk, 0.0) + sc
-            print(f"  -> {hk:<26} : Round Score = {sc:.4f}")
-
-        round_records.append(result)
-        time.sleep(0.5)
-
-    # 3. Dynamic Summary & Emission Report from actual data
-    print("\n" + "=" * 80)
-    print(" ACTUAL ROUND OUTCOMES & EMISSION REPORT")
-    print("=" * 80)
-    print(f"{'Miner Hotkey':<28} | {'Avg Score':<12} | {'Latest Weight':<15} | {'Observed Behavior'}")
-    print("-" * 80)
-
-    last_weights = validator.subtensor.metagraph(validator.config.netuid).weights
-    for idx, ax in enumerate(translator_axons + breaker_axons):
-        hk = ax.hotkey
-        avg_score = cumulative_scores.get(hk, 0.0) / num_rounds
-        wt = validator.ema_scores.get(hk, 0.0)
-        
-        # Determine actual status from execution data
-        if "cheater" in hk:
-            behavior = "Rejected by static gate + rustc -F unsafe_code (0.0 emissions)"
-        elif "weak" in hk:
-            behavior = f"Average pass rate reflected in cubed score ({avg_score:.4f})"
-        elif "honest" in hk:
-            behavior = f"Safe compilation, clean differential tests ({avg_score:.4f})"
-        elif "breaker" in hk:
-            behavior = f"Earned bounties via 50% rule ({avg_score:.4f})"
-        else:
-            behavior = f"Score: {avg_score:.4f}"
-
-        print(f"{hk:<28} | {avg_score:<12.4f} | {wt:<15.4f} | {behavior}")
-
-    print("=" * 80)
-    print(f"Live round history written to: {validator.log_file}")
-    print("=" * 80)
+    banner("SUMMARY")
+    print(f"  {'neuron':<20} {'avg score':<12} {'EMA weight':<12}")
+    for hk, tot in sorted(totals.items(), key=lambda x: -x[1]):
+        print(f"  {hk:<20} {tot / args.rounds:<12.4f} {validator.ema_scores.get(hk, 0.0):<12.4f}")
+    v = validator.ledger.verify()
+    print(f"\n  ledger verify: {'OK' if v['ok'] else 'FAILED'}  rounds={v['rounds']} objects={v['objects_checked']} head={v['head'][:16]}…")
+    print("  round log   : rounds.jsonl   dashboard: python server.py\n")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--rounds", type=int, default=2, help="Number of rounds to run")
-    parser.add_argument("--allow_unsandboxed", action="store_true", default=True, help="Allow local toolchain")
-    parser.add_argument("--mock", action="store_true", default=True, help="Use mock substrate")
-    args = parser.parse_args()
-    run_hackathon_demo(num_rounds=args.rounds, allow_unsandboxed=args.allow_unsandboxed)
+    main()

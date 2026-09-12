@@ -1,0 +1,11 @@
+# Aegis subnet - runtime
+fastapi>=0.110
+uvicorn>=0.27
+pydantic>=2.0
+
+# Real translator miner: official Anthropic SDK (default provider).
+# OpenAI / Gemini / Ollama are reached over plain HTTPS and need no extra package.
+anthropic>=1.0
+
+# Live network. Optional: everything runs on the mock substrate without it.
+# bittensor>=9.0
