@@ -1,29 +1,43 @@
 """
 Translator Miner (neurons/miner_translator.py)
-Translates legacy C whole programs into 100% Safe Rust programs with `fn main()`.
-Supports:
-1. LLM translation engine (provider-agnostic OpenAI / Anthropic / Gemini / Ollama)
-2. Deterministic archetypes (honest, weak, cheater) for benchmarking and testnet
-3. Local pre-submission compilation and self-repair loop
-4. Persistent axon serving and blacklist filtering
+
+Translates a whole C program (stdin bytes -> stdout bytes + exit code) into a
+100% Safe Rust program with `fn main()`.
+
+Modes
+  llm      - the real miner. Provider-agnostic LLM translation (neurons/llm.py)
+             followed by a local repair loop:
+               1. static gate  (unsafe / libc / FFI / process spawning)
+               2. rustc -F unsafe_code
+               3. self-red-team: differential fuzz against the C oracle
+             Each failure is fed back to the model with the exact evidence
+             (compiler stderr or a minimized divergent input) for up to
+             --max_repairs rounds. The miner never sees a reference solution.
+  weak     - benchmark fixture: a deliberately flawed translation for the task
+             (dataset/fixtures.py). Exists so the validator/breaker pipeline can be
+             demonstrated and unit-tested without spending model calls.
+  cheater  - benchmark fixture: an `unsafe`-using submission, to show the gate.
+
+The fixture modes are test doubles, not competitors; they are labelled as such
+in every log line and in the dashboard.
 """
 
 import sys
 import os
 import re
 import time
-import tempfile
+import random
+import hashlib
 import argparse
 import logging
-import subprocess
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict, Any, List
 
-# Ensure project root is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import substrate as bt
 from protocol import TranslationSynapse
-from dataset.tasks import sample_task
+from neurons.llm import LLMClient
+from neurons.difffuzz import LocalDiff, default_seeds
 
 logger = logging.getLogger("miner_translator")
 if not logger.handlers:
@@ -35,96 +49,56 @@ if not logger.handlers:
 BANNED_PATTERNS = [
     (r"\bunsafe\b", "Forbidden 'unsafe' block or keyword detected"),
     (r"\bbuild\.rs\b", "Forbidden 'build.rs' reference detected"),
-    (r"std::process::Command", "Forbidden process spawning detected"),
+    (r"std::process::(Command|exit)", "Forbidden process spawning detected"),
     (r"\blibc::", "Forbidden raw libc access detected"),
     (r'extern\s+"C"', "Forbidden external C FFI detected"),
+    (r"std::fs::", "Forbidden filesystem access detected"),
 ]
+
+SYSTEM_PROMPT = """You are a systems programmer migrating legacy C to memory-safe Rust for a security-critical pipeline.
+
+You will receive one complete C program. It reads raw bytes from stdin, writes raw bytes to stdout, and returns an exit code. Produce a Rust program with IDENTICAL observable behaviour: for every possible stdin, the stdout bytes and the process exit code must match the C program byte-for-byte.
+
+Hard rules (violations are rejected by an automated gate and score zero):
+1. Begin the file with `#![forbid(unsafe_code)]`. No `unsafe`, no FFI, no `libc`, no `build.rs`, no `std::process`, no `std::fs`.
+2. Standard library only. Edition 2021. Must compile with `rustc -F unsafe_code -C overflow-checks=on`.
+3. Treat stdin as raw bytes (`Vec<u8>` via `read_to_end`). Never decode it as UTF-8 or `String` unless the C program's behaviour genuinely depends on UTF-8.
+4. Write stdout as raw bytes with `write_all`. Match every byte the C program prints, including trailing newlines, spacing, and hex case.
+5. Match C's exit codes exactly. `std::process::exit` is forbidden: have `main` return `std::process::ExitCode` (`ExitCode::from(n)`), or return `()` when the C program only ever exits 0.
+6. Reproduce C integer semantics deliberately: unsigned wrap-around uses `wrapping_add` / `wrapping_mul` / `wrapping_shl` etc.; narrowing casts use `as`; signed overflow in C is undefined so the harness never sends inputs that trigger it.
+7. The program must never panic. Bounds, empty input, a single byte, inputs with NUL and 0xFF bytes, inputs larger than any internal buffer, and CRLF line endings must all be handled exactly as the C code handles them.
+8. No comments explaining the C; just the working program.
+
+Reply with ONLY the Rust source inside one ```rust fenced block."""
+
+REPAIR_PROMPT = """The Rust program you produced was rejected. Evidence:
+
+{evidence}
+
+Fix the program so it compiles under the rules and matches the C program's stdout bytes and exit code for the failing inputs AND all other inputs. Reply with ONLY the complete corrected Rust source inside one ```rust fenced block."""
 
 
 def local_static_check(rust_code: str) -> Tuple[bool, Optional[str]]:
-    """Enforce Anti-Cheat rules locally before submitting to validator."""
+    """Mirror of the validator's static gate, run before submitting."""
     if not rust_code or not rust_code.strip():
         return False, "Empty Rust code"
     for pattern, reason in BANNED_PATTERNS:
-        if re.search(pattern, rust_code, re.IGNORECASE):
+        if re.search(pattern, rust_code):
             return False, reason
     return True, None
 
 
-def local_rustc_verify(rust_code: str) -> Tuple[bool, str]:
-    """Attempts local compilation with strict rustc flags to ensure code compiles cleanly."""
-    try:
-        with tempfile.TemporaryDirectory() as td:
-            src = os.path.join(td, "main.rs")
-            out = os.path.join(td, "main.exe" if sys.platform == "win32" else "main")
-            with open(src, "w", encoding="utf-8") as f:
-                f.write(rust_code)
-            
-            cmd = ["rustc", "--edition", "2021", "-O", "-C", "overflow-checks=on", "-F", "unsafe_code", src, "-o", out]
-            if sys.platform == "win32":
-                # Detect gnullvm target if needed
-                cmd = ["rustc", "--target", "x86_64-pc-windows-gnullvm", "--edition", "2021", "-O", "-C", "overflow-checks=on", "-F", "unsafe_code", src, "-o", out]
-
-            res = subprocess.run(cmd, capture_output=True, timeout=10)
-            if res.returncode == 0:
-                return True, ""
-            return False, res.stderr.decode("utf-8", errors="replace")
-    except Exception as e:
-        return True, f"Local rustc unavailable or skipped: {e}"
+def extract_rust(text: str) -> str:
+    m = re.search(r"```(?:rust|rs)?\s*\n([\s\S]*?)```", text)
+    code = m.group(1) if m else text
+    code = code.strip() + "\n"
+    if "#![forbid(unsafe_code)]" not in code:
+        code = "#![forbid(unsafe_code)]\n" + code
+    return code
 
 
-def call_llm_translator(c_code: str, task_name: str) -> Optional[str]:
-    """
-    Provider-agnostic LLM caller.
-    Inspects environment variables for available API keys:
-    - OPENAI_API_KEY
-    - ANTHROPIC_API_KEY
-    - GEMINI_API_KEY
-    """
-    prompt = f"""You are an expert systems programmer translating legacy C into 100% Safe Rust.
-Rules:
-1. Output MUST be a complete, runnable Rust program with `fn main()`.
-2. Input is received as raw bytes via stdin (`std::io::stdin().read_to_end(&mut buf)`).
-3. Output MUST be written as raw bytes via stdout (`std::io::stdout().write_all(&buf)`).
-4. Forbid all unsafe: add `#![forbid(unsafe_code)]` at the top of the file.
-5. Do NOT use external crates (standard library only).
-6. Do NOT use `unsafe`, `build.rs`, `std::process::Command`, `libc`, or FFI.
-7. Use wrapping arithmetic where C uses unsigned types (e.g. `wrapping_add`, `wrapping_mul`).
-8. Return ONLY the Rust source code inside ```rust ... ``` markdown block.
-
-Legacy C Source Code:
-```c
-{c_code}
-```
-"""
-    # Check for OpenAI
-    openai_key = os.environ.get("OPENAI_API_KEY")
-    if openai_key:
-        try:
-            import urllib.request
-            import json
-            req_data = json.dumps({
-                "model": "gpt-4o-mini",
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.1
-            }).encode("utf-8")
-            req = urllib.request.Request(
-                "https://api.openai.com/v1/chat/completions",
-                data=req_data,
-                headers={
-                    "Authorization": f"Bearer {openai_key}",
-                    "Content-Type": "application/json"
-                }
-            )
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                content = data["choices"][0]["message"]["content"]
-                match = re.search(r"```(?:rust)?\s*([\s\S]*?)```", content)
-                return match.group(1).strip() if match else content.strip()
-        except Exception as e:
-            logger.warning(f"OpenAI LLM call failed: {e}")
-
-    return None
+def _describe_bytes(b: bytes, limit: int = 96) -> str:
+    return f"{len(b)} bytes: {b[:limit]!r}" + (" ..." if len(b) > limit else "")
 
 
 class TranslatorMiner:
@@ -135,216 +109,117 @@ class TranslatorMiner:
         self.metagraph = self.subtensor.metagraph(config.netuid)
         self.axon = bt.axon(wallet=self.wallet, port=config.axon_port, ip=config.axon_ip)
         self.mode = config.mode
+        self.max_repairs = getattr(config, "max_repairs", 2)
+        self.self_fuzz_seconds = getattr(config, "self_fuzz_seconds", 4.0)
+        self.llm: Optional[LLMClient] = None
+        if self.mode == "llm":
+            self.llm = LLMClient()
+            logger.info(f"LLM backend: {self.llm.describe()}")
+        self.last_trace: List[Dict[str, Any]] = []
+        role = "FIXTURE" if self.mode in ("weak", "cheater") else "LLM"
+        logger.info(f"Initialized TranslatorMiner wallet={self.wallet} mode='{self.mode}' ({role})")
 
-        logger.info(f"Initialized TranslatorMiner with wallet={self.wallet} in mode='{self.mode}'")
+    # ---------------------------------------------------------------- fixtures
+    def _fixture(self, c_code: str) -> str:
+        from dataset.fixtures import fixture_rust
+        return fixture_rust(self.mode, c_code)
 
-    def synthesize_rust(self, c_code: str, task_name: str) -> Tuple[str, int]:
-        """
-        Synthesize 100% Safe Rust from C code with `fn main()`.
-        Supports deterministic modes for benchmarking and LLM generation.
-        """
+    # --------------------------------------------------------------- real path
+    def _translate_llm(self, c_code: str, task_name: str) -> Tuple[str, int, str]:
+        """Translate + repair. Returns (rust_code, attempts, notes)."""
+        trace: List[Dict[str, Any]] = []
+        self.last_trace = trace
+        if self.llm is None or not self.llm.available:
+            return "", 0, "no LLM provider available"
+
+        user = f"Task: {task_name}\n\n```c\n{c_code}\n```"
+        c_digest = hashlib.sha256(c_code.encode("utf-8")).hexdigest()[:16]
+        res = self.llm.complete(SYSTEM_PROMPT, user, replay_key=f"{task_name}:{c_digest}:attempt1")
+        if res is None:
+            if self.llm.provider is None:
+                return "", 1, ("no LLM credentials and no recording for this task/seed - set ANTHROPIC_API_KEY "
+                               "(or OPENAI_API_KEY / GEMINI_API_KEY / OLLAMA_HOST) or run scripts/record_translations.py")
+            return "", 1, "LLM call failed"
+        code = extract_rust(res.text)
+        trace.append({"attempt": 1, "provider": res.provider, "model": res.model,
+                      "replayed": res.replayed, "latency_s": res.latency_s, "bytes": len(code)})
+
+        best_code, best_div = code, None
         attempts = 1
+        with LocalDiff(c_code, timeout=2.0) as diff:
+            if diff.c_bin is None:
+                logger.warning("Could not build the C oracle locally; submitting without self-test")
+                return code, attempts, "no local C toolchain"
+            rng = random.Random(0xA3615)
 
-        if self.mode == "cheater":
-            # Deliberate violation: uses unsafe block
-            code = (
-                "#![allow(unsafe_code)]\n"
-                "use std::io::{self, Read, Write};\n\n"
-                "fn main() -> io::Result<()> {\n"
-                "    let mut buf = Vec::new();\n"
-                "    io::stdin().read_to_end(&mut buf)?;\n"
-                "    unsafe {\n"
-                "        let ptr = buf.as_mut_ptr();\n"
-                "        if !buf.is_empty() {\n"
-                "            *ptr = *ptr ^ 0xFF;\n"
-                "        }\n"
-                "    }\n"
-                "    io::stdout().write_all(&buf)?;\n"
-                "    Ok(())\n"
-                "}\n"
-            )
-            return code, attempts
+            while True:
+                evidence = None
+                ok, reason = local_static_check(code)
+                if not ok:
+                    evidence = f"Static gate: {reason}"
+                elif not diff.build_rust(code):
+                    err = diff.rust_error[:3000]
+                    evidence = f"rustc failed:\n{err}"
+                else:
+                    # re-derive boundary seeds per draft: a repair can introduce a new constant
+                    seeds = default_seeds(c_code, code)
+                    hits = diff.fuzz(seeds, budget_s=self.self_fuzz_seconds, rng=rng, want=3)
+                    n_div = len(hits)
+                    if best_div is None or n_div < best_div:
+                        best_code, best_div = code, n_div
+                    if hits:
+                        lines = []
+                        for h in hits[:3]:
+                            lines.append(
+                                f"- input {_describe_bytes(h.input)}\n"
+                                f"  C  : exit={h.c_exit} stdout={_describe_bytes(h.c_stdout)}\n"
+                                f"  Rust: exit={h.r_exit} stdout={_describe_bytes(h.r_stdout)} ({h.reason})"
+                            )
+                        evidence = "Differential test found divergences from the C program:\n" + "\n".join(lines)
+                trace[-1]["verdict"] = evidence or "clean"
+                if evidence is None:
+                    return code, attempts, f"self-test clean after {attempts} attempt(s)"
+                logger.info(f"[attempt {attempts}] {evidence.splitlines()[0][:120]}")
+                if attempts > self.max_repairs:
+                    break
+                res = self.llm.complete(SYSTEM_PROMPT, user + "\n\n" + REPAIR_PROMPT.format(evidence=evidence),
+                                        replay_key=f"{task_name}:{c_digest}:attempt{attempts + 1}")
+                if res is None:
+                    break          # no model answer for the repair: keep the best draft so far
+                attempts += 1
+                code = extract_rust(res.text)
+                trace.append({"attempt": attempts, "provider": res.provider, "model": res.model,
+                              "replayed": res.replayed, "latency_s": res.latency_s, "bytes": len(code)})
 
-        elif self.mode == "weak":
-            # Generate flawed solution from task definition
-            task_inst = sample_task(task_name=task_name, seed=42)
-            return task_inst.weak_rust, attempts
+        # Out of repairs: submit the best compiling candidate we saw.
+        if best_div is None:
+            return code, attempts, "never compiled cleanly; submitting last attempt"
+        return best_code, attempts, f"submitting best of {attempts} (self-test divergences={best_div})"
 
-        elif self.mode == "llm":
-            llm_result = call_llm_translator(c_code, task_name)
-            if llm_result:
-                return llm_result, attempts
-            # Fallback to honest
-            task_inst = sample_task(task_name=task_name, seed=42)
-            return task_inst.reference_rust, attempts
+    # ------------------------------------------------------------------ axon
+    def synthesize_rust(self, c_code: str, task_name: str) -> Tuple[str, int]:
+        code, attempts, _ = self.synthesize_rust_with_notes(c_code, task_name)
+        return code, attempts
 
-        else:
-            # Mode "honest": Pure Safe Rust with robust stdin/stdout bytes
-            # Extract constants from C code or look up reference
-            task_inst = sample_task(task_name=task_name, seed=42)
-            
-            # Check if chunk_size or max_run is defined in C code
-            chunk_match = re.search(r"#define\s+CHUNK_SIZE\s+(\d+)", c_code)
-            if chunk_match:
-                csz = int(chunk_match.group(1))
-                code = (
-                    "![forbid(unsafe_code)]\n"
-                    "use std::io::{self, Read, Write};\n\n"
-                    "fn main() -> io::Result<()> {\n"
-                    "    let mut buffer = Vec::new();\n"
-                    "    io::stdin().read_to_end(&mut buffer)?;\n"
-                    f"    let chunk_size = {csz};\n"
-                    "    for chunk in buffer.chunks_mut(chunk_size) {\n"
-                    "        chunk.reverse();\n"
-                    "    }\n"
-                    "    io::stdout().write_all(&buffer)?;\n"
-                    "    Ok(())\n"
-                    "}\n"
-                ).replace("![", "#![")
-                return code, attempts
-
-            run_match = re.search(r"#define\s+MAX_RUN\s+(\d+)", c_code)
-            if run_match:
-                mrun = int(run_match.group(1))
-                code = f"""#![forbid(unsafe_code)]
-use std::io::{{self, Read, Write}};
-
-fn main() -> io::Result<()> {{
-    let mut buffer = Vec::new();
-    io::stdin().read_to_end(&mut buffer)?;
-    if buffer.is_empty() {{ return Ok(()); }}
-    let max_run: usize = {mrun};
-    let mut out = Vec::new();
-    let mut current = buffer[0];
-    let mut count: usize = 1;
-    for &byte in &buffer[1..] {{
-        if byte == current && count < max_run {{
-            count += 1;
-        }} else {{
-            out.push(count as u8);
-            out.push(current);
-            current = byte;
-            count = 1;
-        }}
-    }}
-    out.push(count as u8);
-    out.push(current);
-    io::stdout().write_all(&out)?;
-    Ok(())
-}}
-"""
-                return code, attempts
-
-            # Check if FNV-1a constants are defined in C code
-            basis_match = re.search(r"OFFSET_BASIS\s+(\d+)U?", c_code)
-            prime_match = re.search(r"FNV_PRIME\s+(\d+)U?", c_code)
-            if basis_match and prime_match:
-                basis = int(basis_match.group(1))
-                prime = int(prime_match.group(1))
-
-                code = f"""#![forbid(unsafe_code)]
-use std::io::{{self, Read}};
-
-fn main() -> io::Result<()> {{
-    let mut stdin = io::stdin();
-    let mut buffer = Vec::new();
-    stdin.read_to_end(&mut buffer)?;
-
-    let offset_basis: u32 = {basis};
-    let prime: u32 = {prime};
-
-    let mut hash = offset_basis;
-    let mut has_content = false;
-
-    for &byte in &buffer {{
-        has_content = true;
-        if byte == b'\\n' {{
-            println!("{{:08X}}", hash);
-            hash = offset_basis;
-        }} else {{
-            hash = (hash ^ (byte as u32)).wrapping_mul(prime);
-        }}
-    }}
-
-    if has_content && hash != offset_basis {{
-        println!("{{:08X}}", hash);
-    }}
-    Ok(())
-}}
-"""
-                return code, attempts
-
-            # Check if CRC32 polynomial is defined in C code
-            poly_match = re.search(r"POLY\s+(0x[0-9a-fA-F]+|\d+)U?", c_code)
-            if poly_match:
-                poly_str = poly_match.group(1)
-                poly_val = int(poly_str, 16) if poly_str.startswith("0x") else int(poly_str)
-                code = f"""#![forbid(unsafe_code)]
-use std::io::{{self, Read}};
-
-fn main() -> io::Result<()> {{
-    let mut stdin = io::stdin();
-    let mut buffer = Vec::new();
-    stdin.read_to_end(&mut buffer)?;
-
-    let poly: u32 = {poly_val};
-    let mut crc: u32 = 0xFFFFFFFF;
-
-    for &byte in &buffer {{
-        crc ^= byte as u32;
-        for _ in 0..8 {{
-            if (crc & 1) != 0 {{
-                crc = (crc >> 1) ^ poly;
-            }} else {{
-                crc >>= 1;
-            }}
-        }}
-    }}
-
-    crc ^= 0xFFFFFFFF;
-    println!("{{:08X}}", crc);
-    Ok(())
-}}
-"""
-                return code, attempts
-
-            return task_inst.reference_rust, attempts
-
+    def synthesize_rust_with_notes(self, c_code: str, task_name: str) -> Tuple[str, int, str]:
+        if self.mode in ("weak", "cheater"):
+            return self._fixture(c_code), 1, f"benchmark fixture '{self.mode}'"
+        if self.mode == "llm":
+            return self._translate_llm(c_code, task_name)
+        raise ValueError(f"unknown translator mode '{self.mode}' (use llm|weak|cheater)")
 
     def forward(self, synapse: TranslationSynapse) -> TranslationSynapse:
-        """Bittensor Axon forward handler for TranslationSynapse."""
-        task_name = getattr(synapse, "task_name", "reverse_bytes")
-        logger.info(f"Received translation request for task: '{task_name}'")
-        t_start = time.time()
-
-        rust_code, attempts = self.synthesize_rust(synapse.c_code, task_name)
-
-        # Local validation & repair loop
-        if self.config.local_repair and self.mode != "cheater":
-            valid, reason = local_static_check(rust_code)
-            if not valid:
-                logger.warning(f"Local static check failed: {reason}. Triggering repair loop.")
-                attempts += 1
-                # Replace with safe reference
-                task_inst = sample_task(task_name=task_name, seed=42)
-                rust_code = task_inst.reference_rust
-
-            # Local compilation check
-            comp_ok, comp_err = local_rustc_verify(rust_code)
-            if not comp_ok:
-                logger.warning(f"Local rustc failed: {comp_err[:120]}. Triggering repair loop.")
-                attempts += 1
-                task_inst = sample_task(task_name=task_name, seed=42)
-                rust_code = task_inst.reference_rust
-
+        task_name = getattr(synapse, "task_name", "task")
+        logger.info(f"Received translation request for task '{task_name}' (mode={self.mode})")
+        t0 = time.time()
+        rust_code, attempts, notes = self.synthesize_rust_with_notes(synapse.c_code, task_name)
         synapse.rust_code = rust_code
         synapse.repair_attempts = attempts
-        synapse.compiler_notes = f"Generated via mode={self.mode} in {time.time() - t_start:.3f}s"
-        logger.info(f"Returning translated Rust ({len(rust_code)} bytes, {attempts} attempts)")
+        synapse.compiler_notes = notes
+        logger.info(f"Returning {len(rust_code)} bytes of Rust after {attempts} attempt(s) in {time.time() - t0:.1f}s: {notes}")
         return synapse
 
     def blacklist(self, synapse: TranslationSynapse) -> Tuple[bool, str]:
-        """Reject unregistered hotkeys or zero-stake callers on live network."""
         caller = synapse.dendrite.hotkey
         if self.config.subtensor_network != "local" and not getattr(self.config, "mock", False):
             if caller not in self.metagraph.hotkeys:
@@ -352,14 +227,12 @@ fn main() -> io::Result<()> {{
         return False, "Allowed"
 
     def run(self):
-        """Attach forward handler and start serving."""
         self.axon.attach(forward_fn=self.forward, blacklist_fn=self.blacklist)
         self.axon.start()
-        logger.info(f"Translator miner running on {self.axon.ip}:{self.axon.port}")
+        logger.info(f"Translator miner ({self.mode}) serving on {self.axon.ip}:{self.axon.port}")
         return self
 
     def serve_forever(self):
-        """Keep miner process alive."""
         try:
             while True:
                 time.sleep(1)
@@ -368,16 +241,17 @@ fn main() -> io::Result<()> {{
 
 
 def parse_args(args=None):
-    parser = argparse.ArgumentParser(description="Bittensor C-to-Safe-Rust Translator Miner")
-    parser.add_argument("--netuid", type=int, default=1, help="Subnet netuid")
-    parser.add_argument("--wallet_name", type=str, default="default", help="Bittensor wallet name")
-    parser.add_argument("--wallet_hotkey", type=str, default="translator_honest", help="Hotkey name")
-    parser.add_argument("--axon_port", type=int, default=8091, help="Port to host axon on")
-    parser.add_argument("--axon_ip", type=str, default="127.0.0.1", help="IP address for axon")
-    parser.add_argument("--subtensor_network", type=str, default="local", help="Network (local/finney/test)")
-    parser.add_argument("--mode", type=str, default="honest", choices=["honest", "weak", "cheater", "llm"],
-                        help="Operating mode (honest, weak, cheater, or llm)")
-    parser.add_argument("--local_repair", action="store_true", default=True, help="Enable pre-submission repair loop")
+    parser = argparse.ArgumentParser(description="Aegis C-to-Safe-Rust Translator Miner")
+    parser.add_argument("--netuid", type=int, default=1)
+    parser.add_argument("--wallet_name", type=str, default="default")
+    parser.add_argument("--wallet_hotkey", type=str, default="translator_miner")
+    parser.add_argument("--axon_port", type=int, default=8091)
+    parser.add_argument("--axon_ip", type=str, default="127.0.0.1")
+    parser.add_argument("--subtensor_network", type=str, default="local", help="local | test | finney")
+    parser.add_argument("--mode", type=str, default="llm", choices=["llm", "weak", "cheater"],
+                        help="llm = real miner; weak/cheater = benchmark fixtures")
+    parser.add_argument("--max_repairs", type=int, default=2, help="LLM repair rounds after the first attempt")
+    parser.add_argument("--self_fuzz_seconds", type=float, default=4.0, help="Budget for local differential self-test per attempt")
     parser.add_argument("--mock", action="store_true", default=False, help="Use mock substrate")
     return parser.parse_args(args)
 
