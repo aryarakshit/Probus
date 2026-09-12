@@ -4,7 +4,7 @@
 
 **Bittensor Global Subnet Hackathon** entry · [hackquest.io](https://www.hackquest.io/hackathons/Bittensor-Global-Subnet-Hackathon) · repo: [github.com/aryarakshit/aegis-subnet](https://github.com/aryarakshit/aegis-subnet)
 
-`38 tests` · `8 C programs` · `4 LLM providers` · `Python 3.11+ · rustc · gcc/clang`
+`38 tests` · `8 C programs` · `4 LLM providers` · `Python 3.11+ · rustc · gcc/clang` · `MIT`
 
 - [The problem](#the-problem)
 - [The subnet](#the-subnet)
@@ -333,3 +333,7 @@ only sanitizer-clean inputs, and shrink the reproducer. `test_ledger` tampers wi
 verification to fail. `test_llm` covers provider selection and record/replay. `test_end_to_end` runs a full round and checks
 scores, weights, reproducers and the ledger commit. `test_sandbox` and `test_scoring` cover the differential runner and the
 bounty arithmetic.
+
+## License
+
+[MIT](LICENSE). Same license as Bittensor itself, so miners, validators and the ledger dataset can be used, forked and built on without friction.
