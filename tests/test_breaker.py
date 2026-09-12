@@ -1,49 +1,71 @@
 """
-Unit Test for Breaker Miner (tests/test_breaker.py)
-Verifies adversarial edge-case input generation (raw boundary values, null bytes, unicode).
+Breaker miner tests (tests/test_breaker.py)
+
+The breaker must *find* the planted bug in each weak fixture by differential
+fuzzing, submit only sanitizer-clean inputs, and shrink the reproducer.
 """
 
-import sys
 import os
+import sys
+import unittest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-os.environ["AEGIS_ALLOW_UNSANDBOXED"] = "1"
-os.environ["AEGIS_MOCK"] = "1"
-
+os.environ.setdefault("AEGIS_ALLOW_UNSANDBOXED", "1")
+os.environ.setdefault("AEGIS_MOCK", "1")
 
 from neurons.miner_breaker import BreakerMiner, parse_args
+from neurons.difffuzz import LocalDiff
 from protocol import BreakerSynapse
 from dataset.tasks import sample_task
 
 
-def test_breaker_miner():
-    print("\n--- Testing Breaker Miner Adversarial Input Generation ---")
-    args = parse_args(["--mock"])
-    args.wallet_hotkey = "test_breaker"
-    breaker = BreakerMiner(args)
+class TestBreakerMiner(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.breaker = BreakerMiner(parse_args(["--mock", "--fuzz_seconds", "8", "--wallet_hotkey", "t_breaker"]))
 
-    task = sample_task("reverse_bytes", seed=42)
+    def _attack(self, task_name, seed):
+        task = sample_task(task_name, seed=seed)
+        syn = BreakerSynapse(c_code=task.c_code, rust_code=task.weak_rust, task_name=task.task_name, num_inputs_requested=8)
+        resp = self.breaker.forward(syn)
+        return task, resp, self.breaker.last_report
 
-    syn = BreakerSynapse(
-        c_code=task.c_code,
-        rust_code=task.weak_rust,
-        task_name=task.task_name,
-        num_inputs_requested=10
-    )
-    resp = breaker.forward(syn)
-    raw_inputs = resp.get_raw_inputs()
+    def test_01_finds_planted_bugs(self):
+        expectations = {
+            "utf8_validate": 3,    # surrogate ED A0 80
+            "leb128_decode": 6,    # overflow bits in the last byte
+            "reverse_bytes": 8,    # char vs byte reversal on multibyte input
+            "rle_encode": 300,     # run longer than MAX_RUN
+        }
+        for name, max_len in expectations.items():
+            task, resp, report = self._attack(name, seed=1)
+            hits = report["divergences"]
+            self.assertGreater(len(hits), 0, f"{name}: breaker found no divergence")
+            self.assertEqual(resp.input_encoding, "base64")
+            self.assertLessEqual(hits[0]["input_len"], max_len, f"{name}: reproducer not minimized: {hits[0]}")
+            self.assertIn("divergence", resp.divergence_rationale)
 
-    assert len(raw_inputs) >= 5, f"Expected at least 5 adversarial inputs, got {len(raw_inputs)}"
-    assert b"" in raw_inputs, "Must test empty input"
-    assert b"\x00" in raw_inputs, "Must test null-byte boundary"
-    assert any(any(b > 127 for b in item) for item in raw_inputs), "Must test non-ASCII / unicode"
+    def test_02_submitted_inputs_are_sanitizer_clean(self):
+        task, resp, report = self._attack("kv_normalize", seed=2)
+        raw = resp.get_raw_inputs()
+        self.assertGreaterEqual(len(raw), 1)
+        with LocalDiff(task.c_code) as d:
+            self.assertTrue(all(d.is_clean(raw)), "breaker submitted an input the sanitizer build rejects")
 
-    print(f"--> Breaker successfully generated {len(raw_inputs)} adversarial inputs:")
-    for idx, inp in enumerate(raw_inputs):
-        print(f"    [{idx+1}] {repr(inp)}")
-    print(f"--> Rationale: {resp.divergence_rationale}")
-    print("\n[SUCCESS] Breaker miner tests passed!")
+    def test_03_correct_translation_is_not_broken(self):
+        task = sample_task("base64_encode", seed=4)
+        syn = BreakerSynapse(c_code=task.c_code, rust_code=task.reference_rust, task_name=task.task_name, num_inputs_requested=8)
+        self.breaker.forward(syn)
+        self.assertEqual(self.breaker.last_report["divergences"], [])
+
+    def test_04_non_compiling_candidate_is_reported(self):
+        task = sample_task("crc32", seed=4)
+        bad = 'fn main() { let x: u32 = "no"; }'
+        syn = BreakerSynapse(c_code=task.c_code, rust_code=bad, task_name=task.task_name, num_inputs_requested=4)
+        resp = self.breaker.forward(syn)
+        self.assertEqual(len(resp.get_raw_inputs()), 4)
+        self.assertIn("does not compile", str(self.breaker.last_report["stages"]))
 
 
 if __name__ == "__main__":
-    test_breaker_miner()
+    unittest.main()

@@ -22,8 +22,8 @@ class TranslationSynapse(Synapse):
     
     # Outputs (Miner -> Validator)
     rust_code: Optional[str] = Field(default=None, description="Translated 100% Safe Rust code with fn main()")
-    repair_attempts: int = Field(default=0, description="Number of local repair cycles attempted")
-    compiler_notes: Optional[str] = Field(default=None, description="Miner local validation notes")
+    repair_attempts: int = Field(default=0, description="Number of translate/repair rounds the miner ran")
+    compiler_notes: Optional[str] = Field(default=None, description="Miner's own verdict (self-test result, provider used)")
 
     def deserialize(self) -> Optional[str]:
         return self.rust_code
@@ -43,21 +43,25 @@ class BreakerSynapse(Synapse):
     num_inputs_requested: int = Field(default=10, description="Target number of adversarial test inputs")
 
     # Outputs (Breaker Miner -> Validator)
-    test_inputs: List[Union[str, bytes]] = Field(default_factory=list, description="List of edge-case test inputs (raw bytes or base64)")
-    divergence_rationale: Optional[str] = Field(default=None, description="Hypothesized flaw explanation")
+    # Synapses travel as JSON on a real network, so arbitrary bytes must be base64-encoded.
+    test_inputs: List[Union[str, bytes]] = Field(default_factory=list, description="Adversarial inputs (base64 strings when input_encoding == 'base64')")
+    input_encoding: str = Field(default="utf8", description="'base64' or 'utf8' for entries of test_inputs")
+    divergence_rationale: Optional[str] = Field(default=None, description="Breaker's explanation of the flaw it targets")
 
     def deserialize(self) -> List[bytes]:
         return self.get_raw_inputs()
 
     def get_raw_inputs(self) -> List[bytes]:
-        raw_list = []
+        raw_list: List[bytes] = []
         for item in self.test_inputs:
             if isinstance(item, bytes):
                 raw_list.append(item)
             elif isinstance(item, str):
-                # Check if it is a base64 encoded string prefix or decode safely
-                try:
+                if self.input_encoding == "base64":
+                    try:
+                        raw_list.append(base64.b64decode(item, validate=True))
+                    except Exception:
+                        continue
+                else:
                     raw_list.append(item.encode("utf-8"))
-                except Exception:
-                    pass
         return raw_list
