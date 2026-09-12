@@ -1,288 +1,367 @@
 """
-Aegis Subnet Server & Interactive Command Center (server.py)
-Hosts the FastAPI REST API and live Web Dashboard for hackathon judges and developers.
-Coordinates Validator, Translator Miners, and Breaker Miners with real-time visualization.
+Aegis Subnet command center (server.py)
+
+FastAPI backend for the dashboard. Hosts a validator and four neurons on the mock
+substrate, runs rounds in a background thread, and streams every validator
+event and log line to the browser over Server-Sent Events so a round can be
+watched as it happens: gate verdicts, compile results, breaker hits with their
+minimized reproducers, weights, and the ledger commit.
+
+    python server.py            ->  http://127.0.0.1:8000
 """
 
 import sys
 import os
-import time
 import json
+import time
+import queue
+import base64
 import logging
+import threading
 from typing import Optional, List, Dict, Any
-from fastapi import FastAPI, Request, Response
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
+
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse, StreamingResponse, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-# Ensure project root is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
-
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
-if hasattr(sys.stderr, "reconfigure"):
-    sys.stderr.reconfigure(encoding="utf-8")
 
-# Set defaults for standalone server execution
-if not os.environ.get("AEGIS_ALLOW_UNSANDBOXED"):
-    os.environ["AEGIS_ALLOW_UNSANDBOXED"] = "1"
-if not os.environ.get("AEGIS_MOCK"):
-    os.environ["AEGIS_MOCK"] = "1"
+os.environ.setdefault("AEGIS_ALLOW_UNSANDBOXED", "1")
+os.environ.setdefault("AEGIS_MOCK", "1")
 
-import substrate as bt
-from protocol import TranslationSynapse, BreakerSynapse
 from neurons.miner_translator import TranslatorMiner, parse_args as parse_tr_args
 from neurons.miner_breaker import BreakerMiner, parse_args as parse_br_args
 from neurons.validator import Validator, static_analysis_gate, parse_args as parse_val_args
 from neurons.scoring import calculate_translator_pre_score
-from dataset.tasks import sample_task
+from neurons.llm import LLMClient
+from neurons.ledger import Ledger
+from dataset.tasks import sample_task, list_tasks, TASK_DESCRIPTIONS
 
-logger = logging.getLogger("server")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROUNDS_LOG = os.environ.get("AEGIS_ROUNDS_LOG") or os.path.join(BASE_DIR, "rounds.jsonl")
+LEDGER_DIR = os.environ.get("AEGIS_LEDGER_DIR")  # None -> ./ledger
+REPLAY_SEEDS = [101, 202, 303]
+
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s")
+logger = logging.getLogger("server")
 
-app = FastAPI(title="Aegis Subnet - C-to-Safe-Rust Subnet", version="1.0.0")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Global subnet state
-SUBNET_STATE = {
-    "validator": None,
-    "miners": {},
-    "round_history": [],
-    "total_rounds": 0,
-    "current_block": 1000,
-    "active_weights": {}
-}
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    init_subnet()
+    yield
 
 
-def load_round_history_from_disk(log_file="rounds.jsonl") -> List[Dict[str, Any]]:
-    history = []
-    if os.path.exists(log_file):
-        with open(log_file, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if line:
-                    try:
-                        history.append(json.loads(line))
-                    except Exception:
-                        pass
-    return history
+app = FastAPI(title="Aegis Subnet", version="2.0.0", lifespan=lifespan)
+app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
+
+
+# --------------------------------------------------------------------------- events
+class EventBus:
+    """Fan-out of validator events + log lines to every open SSE connection."""
+
+    def __init__(self):
+        self.subscribers: List[queue.Queue] = []
+        self.lock = threading.Lock()
+        self.recent: List[Dict[str, Any]] = []
+
+    def publish(self, evt: Dict[str, Any]):
+        with self.lock:
+            self.recent.append(evt)
+            self.recent = self.recent[-400:]
+            for q in list(self.subscribers):
+                try:
+                    q.put_nowait(evt)
+                except queue.Full:
+                    pass
+
+    def subscribe(self) -> queue.Queue:
+        q: queue.Queue = queue.Queue(maxsize=2000)
+        with self.lock:
+            self.subscribers.append(q)
+        return q
+
+    def unsubscribe(self, q: queue.Queue):
+        with self.lock:
+            if q in self.subscribers:
+                self.subscribers.remove(q)
+
+
+BUS = EventBus()
+
+
+class BusLogHandler(logging.Handler):
+    def emit(self, record):
+        try:
+            BUS.publish({"t": time.time(), "kind": "log", "source": record.name,
+                         "level": record.levelname, "msg": record.getMessage()})
+        except Exception:
+            pass
+
+
+for name in ("validator", "miner_translator", "miner_breaker", "sandbox", "llm", "substrate"):
+    logging.getLogger(name).addHandler(BusLogHandler())
+
+
+# --------------------------------------------------------------------------- state
+STATE: Dict[str, Any] = {"validator": None, "miners": {}, "running": False, "current": None, "llm": None}
 
 
 def init_subnet():
-    """Spin up Validator and the 4 archetypal Miners."""
-    logger.info("Initializing Subnet Nodes...")
-    
-    # 1. Validator
-    v_args = parse_val_args([])
-    v_args.wallet_hotkey = "val_prime"
-    v_args.mock = True
-    v_args.no_docker = True
-    v_args.log_file = "rounds.jsonl"
-    val = Validator(v_args)
-    SUBNET_STATE["validator"] = val
+    v_args = parse_val_args(["--mock", "--no_docker"])
+    v_args.wallet_hotkey = "validator"
+    v_args.log_file = ROUNDS_LOG
+    v_args.ledger_dir = LEDGER_DIR
+    STATE["validator"] = Validator(v_args, on_event=BUS.publish)
 
-    # 2. Honest Translator
-    m1_args = parse_tr_args([])
-    m1_args.wallet_hotkey = "miner_translator_honest"
-    m1_args.mode = "honest"
-    m1_args.mock = True
-    m_honest = TranslatorMiner(m1_args).run()
+    def mk_tr(hotkey, mode, extra=()):
+        return TranslatorMiner(parse_tr_args(["--mock", "--mode", mode, "--wallet_hotkey", hotkey, *extra])).run()
 
-    # 3. Weak Translator
-    m2_args = parse_tr_args([])
-    m2_args.wallet_hotkey = "miner_translator_weak"
-    m2_args.mode = "weak"
-    m2_args.mock = True
-    m_weak = TranslatorMiner(m2_args).run()
-
-    # 4. Cheater Translator
-    m3_args = parse_tr_args([])
-    m3_args.wallet_hotkey = "miner_translator_cheater"
-    m3_args.mode = "cheater"
-    m3_args.mock = True
-    m_cheater = TranslatorMiner(m3_args).run()
-
-    # 5. Breaker Fuzzer
-    m4_args = parse_br_args([])
-    m4_args.wallet_hotkey = "miner_breaker"
-    m4_args.mock = True
-    m_breaker = BreakerMiner(m4_args).run()
-
-    SUBNET_STATE["miners"] = {
-        "honest": m_honest,
-        "weak": m_weak,
-        "cheater": m_cheater,
-        "breaker": m_breaker
+    STATE["miners"] = {
+        "translator_llm": mk_tr("translator_llm", "llm", ["--self_fuzz_seconds", "4"]),
+        "translator_weak": mk_tr("translator_weak", "weak"),
+        "translator_cheater": mk_tr("translator_cheater", "cheater"),
+        "breaker": BreakerMiner(parse_br_args(["--mock", "--wallet_hotkey", "breaker", "--fuzz_seconds", "8"])).run(),
     }
-    
-    # Load past rounds from disk
-    SUBNET_STATE["round_history"] = load_round_history_from_disk()
-    SUBNET_STATE["total_rounds"] = len(SUBNET_STATE["round_history"])
-    logger.info(f"All Subnet nodes online. Loaded {SUBNET_STATE['total_rounds']} past rounds from rounds.jsonl.")
+    probe = LLMClient()
+    STATE["llm"] = {"provider": probe.provider, "model": probe.model, "mode": "live" if probe.provider else "replay",
+                    "replay_files": len(os.listdir(os.path.join(BASE_DIR, "dataset", "llm_replay")))
+                    if os.path.isdir(os.path.join(BASE_DIR, "dataset", "llm_replay")) else 0}
+    logger.info(f"Subnet online. LLM: {STATE['llm']}")
 
 
-@app.on_event("startup")
-def on_startup():
-    init_subnet()
+def load_rounds() -> List[Dict[str, Any]]:
+    out = []
+    if os.path.exists(ROUNDS_LOG):
+        with open(ROUNDS_LOG, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    r = json.loads(line)
+                except Exception:
+                    continue
+                if "ledger" in r:          # ignore rows from the pre-ledger schema
+                    out.append(r)
+    return out
 
 
-class ValidationRequest(BaseModel):
-    task_name: Optional[str] = "reverse_bytes"
+# --------------------------------------------------------------------------- models
+class RunRequest(BaseModel):
+    task_name: Optional[str] = None
     num_tests: int = 20
+    seed: Optional[int] = None
 
 
-class GateCheckRequest(BaseModel):
+class GateRequest(BaseModel):
     rust_code: str
 
 
+# --------------------------------------------------------------------------- api
 @app.get("/api/status")
-def get_status():
-    val = SUBNET_STATE["validator"]
+def status():
+    val: Validator = STATE["validator"]
+    rounds = load_rounds()
     return {
         "status": "online",
         "netuid": 1,
-        "current_block": val.subtensor.get_current_block() if val else 1000,
-        "total_rounds_completed": len(load_round_history_from_disk()),
-        "miners_active": len(SUBNET_STATE["miners"]),
-        "latest_weights": SUBNET_STATE["active_weights"],
-        "docker_sandbox_active": val.sandbox.docker_available if val else False
+        "network": "mock-local",
+        "block": val.subtensor.get_current_block() if val else 0,
+        "rounds": len(rounds),
+        "running": STATE["running"],
+        "current": STATE["current"],
+        "neurons": {k: {"role": "breaker" if k == "breaker" else "translator",
+                        "mode": getattr(m, "mode", "fuzz")} for k, m in STATE["miners"].items()},
+        "sandbox": "docker" if (val and val.sandbox.use_docker) else "host-toolchain",
+        "llm": STATE["llm"],
+        "ledger": val.ledger.stats() if val else {},
+        "tasks": len(list_tasks()),
+        "ema": val.ema_scores if val else {},
     }
+
+
+@app.get("/api/tasks")
+def tasks():
+    out = []
+    for name in list_tasks():
+        t = sample_task(name, seed=1)
+        out.append({"name": name, "description": TASK_DESCRIPTIONS.get(name, ""),
+                    "constants": list(t.constants.keys()), "c_lines": t.c_code.count("\n")})
+    return {"tasks": out}
+
+
+@app.get("/api/task/{name}")
+def task_source(name: str, seed: int = 1):
+    if name not in list_tasks():
+        raise HTTPException(404, "unknown task")
+    t = sample_task(name, seed=seed)
+    return {"name": name, "constants": t.constants, "c_code": t.c_code, "description": TASK_DESCRIPTIONS.get(name, "")}
+
+
+@app.get("/api/rounds")
+def rounds(limit: int = 50):
+    rs = load_rounds()
+    return {"rounds": rs[-limit:][::-1], "total": len(rs)}
+
+
+@app.get("/api/rounds/{round_id}")
+def round_detail(round_id: int):
+    for r in load_rounds():
+        if r.get("round_id") == round_id:
+            return r
+    raise HTTPException(404, "no such round")
 
 
 @app.get("/api/leaderboard")
-def get_leaderboard():
-    history = load_round_history_from_disk()
-    if not history:
-        return {"leaderboard": []}
-
-    scores: Dict[str, List[float]] = {}
-    for r in history:
-        r_scores = r.get("round_scores", {})
-        for hk, sc in r_scores.items():
-            scores.setdefault(hk, []).append(float(sc))
-
+def leaderboard():
+    rs = load_rounds()
+    agg: Dict[str, Dict[str, Any]] = {}
+    for r in rs:
+        for hk, sc in r.get("round_scores", {}).items():
+            a = agg.setdefault(hk, {"hotkey": hk, "rounds": 0, "total": 0.0, "broken": 0, "gated": 0, "bounties": 0})
+            a["rounds"] += 1
+            a["total"] += float(sc)
+            ev = r.get("translator_evals", {}).get(hk)
+            if ev:
+                a["role"] = "translator"
+                if ev.get("broken_by"):
+                    a["broken"] += 1
+                if not ev.get("gate_success"):
+                    a["gated"] += 1
+            if hk in r.get("breaker_evals", {}):
+                a["role"] = "breaker"
+                if float(r["breaker_evals"][hk].get("final_score", 0)) > 0:
+                    a["bounties"] += 1
+    val: Validator = STATE["validator"]
+    latest = rs[-1] if rs else {}
+    weights = {hk: float(latest.get("normalized_weights", {}).get(str(uid), 0.0)) for hk, uid in latest.get("uids", {}).items()}
     board = []
-    for idx, (hk, sc_list) in enumerate(sorted(scores.items(), key=lambda x: sum(x[1])/len(x[1]), reverse=True)):
-        avg = sum(sc_list) / len(sc_list)
-        role = "Breaker" if "breaker" in hk else "Translator"
-        status = "ZERO EMISSION" if avg == 0 else ("ACTIVE" if avg < 0.8 else "STRONG")
-        board.append({
-            "uid": idx,
-            "hotkey": hk,
-            "role": role,
-            "avg_score": round(avg, 4),
-            "status": status,
-            "decision": f"Avg Score: {avg:.4f}"
-        })
+    for hk, a in agg.items():
+        board.append({**a, "avg": round(a["total"] / max(1, a["rounds"]), 4),
+                      "ema": val.ema_scores.get(hk, 0.0) if val else 0.0, "weight": weights.get(hk, 0.0)})
+    board.sort(key=lambda x: -x["avg"])
     return {"leaderboard": board}
 
 
+@app.get("/api/ledger")
+def ledger(limit: int = 20):
+    val: Validator = STATE["validator"]
+    led: Ledger = val.ledger
+    entries = []
+    if os.path.exists(led.chain_path):
+        with open(led.chain_path, "r", encoding="utf-8") as f:
+            entries = [json.loads(l) for l in f if l.strip()]
+    return {"stats": led.stats(), "chain": entries[-limit:][::-1]}
 
-@app.post("/api/run-round")
-def run_round(req: ValidationRequest):
-    val: Validator = SUBNET_STATE["validator"]
-    miners = SUBNET_STATE["miners"]
 
-    translator_axons = [
-        miners["honest"].axon,
-        miners["weak"].axon,
-        miners["cheater"].axon
-    ]
-    breaker_axons = [
-        miners["breaker"].axon
-    ]
+@app.get("/api/ledger/verify")
+def ledger_verify():
+    val: Validator = STATE["validator"]
+    t0 = time.perf_counter()
+    rep = val.ledger.verify()
+    rep["elapsed_ms"] = round((time.perf_counter() - t0) * 1000, 1)
+    return rep
 
-    t_start = time.time()
-    res = val.run_validation_round(
-        translator_axons=translator_axons,
-        breaker_axons=breaker_axons,
-        num_tests=req.num_tests,
-        task_name=req.task_name
-    )
-    elapsed = time.time() - t_start
 
-    SUBNET_STATE["active_weights"] = res["weights"]
-    
-    round_payload = {
-        "round_id": res["round_id"],
-        "timestamp": time.time(),
-        "task_name": res["task_name"],
-        "elapsed_seconds": round(elapsed, 3),
-        "scores": res["round_scores"],
-        "weights": res["weights"],
-        "details": res.get("details", {}),
-        "translator_evals": res.get("translator_evals", {})
-    }
-    SUBNET_STATE["round_history"] = load_round_history_from_disk()
-    return round_payload
+@app.get("/api/ledger/round/{height}")
+def ledger_round(height: int):
+    val: Validator = STATE["validator"]
+    path = os.path.join(val.ledger.rounds, f"{height:06d}.json")
+    if not os.path.exists(path):
+        raise HTTPException(404, "no such height")
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+@app.get("/api/ledger/object/{digest}")
+def ledger_object(digest: str):
+    val: Validator = STATE["validator"]
+    blob = val.ledger.get(digest)
+    if blob is None:
+        raise HTTPException(404, "no such object")
+    try:
+        text = blob.decode("utf-8")
+        kind = "text"
+    except UnicodeDecodeError:
+        text = None
+        kind = "binary"
+    return {"sha256": digest, "size": len(blob), "kind": kind, "text": text,
+            "hex": blob[:512].hex(), "repr": repr(blob[:128]), "b64": base64.b64encode(blob).decode("ascii")}
 
 
 @app.post("/api/check-gate")
-def check_gate(req: GateCheckRequest):
-    t_start = time.time()
+def check_gate(req: GateRequest):
+    t0 = time.perf_counter()
     passed, reason = static_analysis_gate(req.rust_code)
-    elapsed = time.time() - t_start
-    score = calculate_translator_pre_score(
-        passed_hidden=1,
-        total_hidden=1,
-        compile_success=True,
-        gate_success=passed,
-        code_size_bytes=len(req.rust_code.encode("utf-8"))
-    )
-    return {
-        "passed": passed,
-        "reason": reason,
-        "elapsed_seconds": round(elapsed, 4),
-        "pre_score": score
-    }
+    ms = (time.perf_counter() - t0) * 1000
+    return {"passed": passed, "reason": reason, "elapsed_ms": round(ms, 4),
+            "pre_score": calculate_translator_pre_score(1, 1, True, passed, len(req.rust_code.encode()))}
 
 
-@app.get("/api/dataset")
-def get_dataset():
-    task = sample_task("reverse_bytes", seed=42)
-    return {
-        "task_name": task.task_name,
-        "constants": task.constants,
-        "sample_c_code": task.c_code,
-        "reference_rust": task.reference_rust
-    }
+@app.post("/api/run-round")
+def run_round(req: RunRequest):
+    if STATE["running"]:
+        raise HTTPException(409, "a round is already running")
+    val: Validator = STATE["validator"]
+    m = STATE["miners"]
+    task = req.task_name if req.task_name in list_tasks() else None
+    seed = req.seed
+    if seed is None and STATE["llm"] and STATE["llm"]["mode"] == "replay":
+        seed = REPLAY_SEEDS[val.total_rounds % len(REPLAY_SEEDS)]
+
+    def work():
+        STATE["running"] = True
+        STATE["current"] = {"task": task or "random", "seed": seed, "started": time.time()}
+        try:
+            val.run_validation_round(
+                translator_axons=[m["translator_llm"].axon, m["translator_weak"].axon, m["translator_cheater"].axon],
+                breaker_axons=[m["breaker"].axon], num_tests=req.num_tests, task_name=task, seed=seed)
+        except Exception as e:
+            logger.exception("round failed")
+            BUS.publish({"t": time.time(), "kind": "error", "msg": str(e)})
+        finally:
+            STATE["running"] = False
+            STATE["current"] = None
+
+    threading.Thread(target=work, daemon=True).start()
+    return {"started": True, "task": task or "random", "seed": seed}
 
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+@app.get("/api/events")
+def events():
+    q = BUS.subscribe()
+
+    def gen():
+        try:
+            yield "retry: 2000\n\n"
+            yield f"data: {json.dumps({'kind': 'hello', 't': time.time(), 'running': STATE['running']})}\n\n"
+            while True:
+                try:
+                    evt = q.get(timeout=15)
+                    yield f"data: {json.dumps(evt, default=str)}\n\n"
+                except queue.Empty:
+                    yield ": keepalive\n\n"
+        finally:
+            BUS.unsubscribe(q)
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard():
-    html_path = os.path.join(BASE_DIR, "templates", "index.html")
-    with open(html_path, "r", encoding="utf-8") as f:
+    with open(os.path.join(BASE_DIR, "templates", "index.html"), "r", encoding="utf-8") as f:
         return Response(content=f.read(), media_type="text/html")
-
-
-@app.get("/static/css/bauhaus.css")
-def get_bauhaus_css():
-    css_path = os.path.join(BASE_DIR, "static", "css", "bauhaus.css")
-    with open(css_path, "r", encoding="utf-8") as f:
-        return Response(content=f.read(), media_type="text/css")
-
-
-@app.get("/static/js/dashboard.js")
-def get_dashboard_js():
-    js_path = os.path.join(BASE_DIR, "static", "js", "dashboard.js")
-    with open(js_path, "r", encoding="utf-8") as f:
-        return Response(content=f.read(), media_type="application/javascript")
 
 
 def main():
     import uvicorn
-    logger.info("Starting Aegis Subnet Command Center on http://127.0.0.1:8000 ...")
-    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info")
+    logger.info("Aegis command center on http://127.0.0.1:8000")
+    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="warning")
 
 
 if __name__ == "__main__":

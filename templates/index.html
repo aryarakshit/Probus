@@ -3,329 +3,210 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AEGIS // BITTENSOR C-TO-SAFE-RUST [BAUHAUS COMMAND]</title>
-    <link rel="stylesheet" href="/static/css/bauhaus.css">
+    <title>AEGIS — Adversarial C→Safe Rust Subnet</title>
+    <link rel="stylesheet" href="/static/css/bauhaus.css?v=2">
 </head>
 <body>
-    <div class="container">
+<div class="wrap">
 
-        <!-- ====================================================================
-             TOP MASTHEAD: CONSTRUCTIVIST BRANDING & LIVE NETWORK STATUS
-             ==================================================================== -->
-        <header class="masthead">
-            <div class="brand-section">
-                <div class="bauhaus-logo">
-                    <div class="shape-circle" title="Bauhaus Circle - Primary Red"></div>
-                    <div class="shape-square" title="Bauhaus Square - Primary Blue"></div>
-                    <div class="shape-triangle" title="Bauhaus Triangle - Primary Yellow"></div>
-                </div>
-                <div class="brand-titles">
-                    <h1>AEGIS // BITTENSOR SUBNET</h1>
-                    <p>AUTONOMOUS C-TO-SAFE-RUST COMPILER ENGINE</p>
-                </div>
+    <!-- ================================================================ MASTHEAD -->
+    <header class="masthead">
+        <div class="wordmark">
+            <div class="mark" aria-hidden="true">
+                <span class="g-circle"></span><span class="g-square"></span>
+                <span class="g-tri"></span><span class="g-ring"></span>
             </div>
-
-            <div class="header-status">
-                <div class="status-badge" id="net-badge">
-                    <span class="status-indicator"></span>
-                    <span id="disp-netuid">NETUID: 1</span>
-                    <span style="opacity: 0.4;">|</span>
-                    <span id="disp-block-top">BLOCK: #1000</span>
-                    <span style="opacity: 0.4;">|</span>
-                    <span id="disp-status-text">ONLINE</span>
-                </div>
+            <div>
+                <h1>AEG<span>I</span>S</h1>
+                <div class="sub">Bittensor subnet · adversarial C → Safe Rust</div>
             </div>
-        </header>
+        </div>
+        <div class="status-strip" id="status-strip">
+            <div><span class="dot" id="dot-net"></span><span class="k">net</span><b id="s-net">—</b></div>
+            <div><span class="k">block</span><b id="s-block">—</b></div>
+            <div><span class="k">rounds</span><b id="s-rounds">—</b></div>
+            <div><span class="k">llm</span><b id="s-llm">—</b></div>
+            <div><span class="k">sandbox</span><b id="s-sandbox">—</b></div>
+            <div><span class="k">ledger</span><b id="s-ledger">—</b></div>
+        </div>
+    </header>
 
-        <!-- ====================================================================
-             CONSTRUCTIVIST HERO COMPOSITION (BAUHAUS POSTER PANEL)
-             ==================================================================== -->
-        <section class="hero-composition">
-            <div class="hero-left">
-                <div>
-                    <div class="hero-tag">[ SPECIFICATION: FORM FOLLOWS FUNCTION ]</div>
-                    <h2 class="hero-headline">
-                        VERIFIABLE <span class="red">MEMORY SAFETY</span> THROUGH <span class="blue">ADVERSARIAL CONSENSUS</span>
-                    </h2>
-                    <p class="hero-description">
-                        Autonomous subnet transforming legacy C codebases into provably memory-safe Rust with zero unsafe blocks. 
-                        Translator miners synthesize safe implementations; Breaker miners fuzz for semantic divergence. 
-                        Validated using isolated compiler pipelines, cubed pass-rate scoring, and anti-collusion mechanics.
-                    </p>
-                </div>
-                <div class="hero-pills">
-                    <span class="hero-pill">ZERO-UNSAFE AST GATE</span>
-                    <span class="hero-pill">CUBED PASS-RATE (passed/total)³</span>
-                    <span class="hero-pill">50% BREAKER BOUNTY CAP</span>
-                    <span class="hero-pill">ISOLATED COMPILER SANDBOX</span>
-                </div>
+    <!-- ================================================================ HERO -->
+    <section class="hero">
+        <div>
+            <h2>We pay hackers to prove the <em>AI</em> wrong.</h2>
+            <p class="lede">
+                Translator miners turn legacy C into <code>#![forbid(unsafe_code)]</code> Rust. Breaker miners are paid
+                to find the one input where the two programs disagree. Validators compile both under sanitizers, compare
+                every byte of stdout and every exit code, and commit the verdict — with the reproducer — to a
+                merkle-chained ledger. The output is not a translation; it is a translation nobody could break.
+            </p>
+        </div>
+        <div class="steps">
+            <div class="step"><div class="n">01</div><h4>Translate</h4><p>LLM miner drafts Safe Rust, compiles it, fuzzes it against the C oracle itself, and repairs from the evidence before submitting.</p></div>
+            <div class="step"><div class="n">02</div><h4>Break</h4><p>Breaker compiles the candidate, mutates inputs against the C reference until stdout or exit code diverge, then shrinks the reproducer.</p></div>
+            <div class="step"><div class="n">03</div><h4>Verify</h4><p>Static gate &lt;1 ms → rustc -F unsafe_code → sandboxed differential run → cubed pass-rate, 50% anti-collusion bounty, ledger commit.</p></div>
+        </div>
+    </section>
+
+    <!-- ================================================================ CONTROLS -->
+    <section class="section">
+        <div class="sec-head"><h3><i>01</i>Dispatch a round</h3><span class="note" id="ctl-note">real compilers · real sanitizers · nothing scripted</span></div>
+        <div class="controls" id="controls">
+            <div>
+                <label for="task">C program</label>
+                <select id="task" class="select"><option value="">random from pool</option></select>
+                <span class="note" id="task-desc" style="font-family:var(--mono);font-size:11px;color:var(--grey)"></span>
             </div>
-
-            <div class="hero-right">
-                <div class="composition-art">
-                    <div class="art-circle"></div>
-                    <div class="art-square-rot"></div>
-                    <div class="art-center-square">
-                        <div class="art-center-triangle"></div>
-                    </div>
-                </div>
-                <div class="composition-caption">
-                    AEGIS VERIFICATION MATRIX // NO. 01
-                </div>
+            <div>
+                <label for="tests">hidden tests</label>
+                <select id="tests" class="select">
+                    <option value="15">15</option><option value="20" selected>20</option><option value="40">40</option><option value="80">80</option>
+                </select>
             </div>
-        </section>
-
-        <!-- ====================================================================
-             COLOR-BLOCKED METRIC DECK
-             ==================================================================== -->
-        <section class="metric-deck">
-            <!-- Metric 1: Yellow (Current Block) -->
-            <div class="metric-card metric-card-yellow">
-                <div class="metric-corner-badge"></div>
-                <div class="metric-header">SUBTENSOR HEIGHT</div>
-                <div class="metric-value" id="disp-block">#1000</div>
-                <div class="metric-sub">SYNCHRONIZED METAGRAPH</div>
+            <div>
+                <label for="seed">seed (optional)</label>
+                <input id="seed" class="input" type="number" placeholder="auto">
             </div>
-
-            <!-- Metric 2: Blue (Rounds Completed) -->
-            <div class="metric-card metric-card-blue">
-                <div class="metric-corner-badge circle"></div>
-                <div class="metric-header">VALIDATION ROUNDS</div>
-                <div class="metric-value" id="disp-rounds">0</div>
-                <div class="metric-sub">ROUNDS LOGGED IN ROUNDS.JSONL</div>
+            <div>
+                <button class="btn" id="run"><span class="g-circle"></span>Run round</button>
+                <div class="running-bar"></div>
             </div>
+        </div>
+    </section>
 
-            <!-- Metric 3: Red (Active Miners) -->
-            <div class="metric-card metric-card-red">
-                <div class="metric-corner-badge rotated"></div>
-                <div class="metric-header">ACTIVE NEURONS</div>
-                <div class="metric-value" id="disp-miners">4</div>
-                <div class="metric-sub">3 TRANSLATORS • 1 BREAKER</div>
+    <!-- ================================================================ LIVE ROUND -->
+    <section class="section">
+        <div class="sec-head"><h3><i>02</i>Live round</h3><span class="note" id="live-note">streaming validator events</span></div>
+        <div class="round-head">
+            <div class="task" id="r-task">idle <small id="r-consts"></small></div>
+            <div class="meta"><span id="r-id">round —</span><span id="r-hidden">hidden —</span><span id="r-elapsed"></span></div>
+        </div>
+        <div class="neurons" id="neurons"></div>
+
+        <div class="spotlight" id="spotlight">
+            <div>
+                <h5>Proof of break</h5>
+                <div class="headline" id="sp-head">—</div>
+                <div class="kv" style="margin-top:14px" id="sp-meta"></div>
             </div>
-
-            <!-- Metric 4: Black (Compiler Sandbox Mode) -->
-            <div class="metric-card metric-card-black">
-                <div class="metric-corner-badge circle"></div>
-                <div class="metric-header">SANDBOX RUNNER</div>
-                <div class="metric-value" id="disp-sandbox">ACTIVE</div>
-                <div class="metric-sub">GCC ASAN/UBSAN + RUSTC</div>
+            <div>
+                <h5>Reproducer bytes</h5>
+                <div class="hexdump" id="sp-hex"></div>
             </div>
-        </section>
-
-        <!-- ====================================================================
-             TWO-COLUMN WORKSPACE: CONTROLS & LEADERBOARD
-             ==================================================================== -->
-        <div class="workspace-grid">
-
-            <!-- LEFT: INTERACTIVE CONTROL DECK -->
-            <section class="bauhaus-panel">
-                <div class="panel-header blue">
-                    <span class="panel-title">VALIDATOR CONTROL DECK</span>
-                    <span class="panel-badge">MANUAL TRIGGER</span>
+            <div>
+                <h5>What each program did</h5>
+                <div class="vs">
+                    <div class="col"><h6>C reference</h6><pre id="sp-c"></pre></div>
+                    <div class="col rust"><h6>Rust candidate</h6><pre id="sp-r"></pre></div>
                 </div>
-                <div class="panel-body">
-                    <!-- Task Selection -->
-                    <div class="control-group">
-                        <label class="control-label" for="task-select">TASK POOL SELECTION</label>
-                        <select id="task-select" class="bauhaus-select">
-                            <option value="reverse_bytes" selected>reverse_bytes (Buffer Reversal &amp; Boundary Safety)</option>
-                            <option value="crc32_fast">crc32_fast (Bitwise Arithmetic &amp; Lookup Table)</option>
-                            <option value="parse_varint">parse_varint (LEB128 Varint Decoding &amp; Overflow Guard)</option>
-                            <option value="matrix_multiply">matrix_multiply (2D Memory Strides &amp; Cache Locality)</option>
-                            <option value="sanitize_ascii">sanitize_ascii (In-place Mutation &amp; Null Terminator)</option>
-                        </select>
-                    </div>
-
-                    <!-- Test Count Selection -->
-                    <div class="control-group">
-                        <label class="control-label" for="test-count-select">HIDDEN SANITIZER FUZZ TESTS</label>
-                        <select id="test-count-select" class="bauhaus-select">
-                            <option value="20" selected>20 Hidden Tests per Evaluation</option>
-                            <option value="50">50 Hidden Tests per Evaluation (Intensive)</option>
-                            <option value="100">100 Hidden Tests per Evaluation (Full Coverage)</option>
-                        </select>
-                    </div>
-
-                    <!-- Dispatch Validation Round Button -->
-                    <button id="btn-trigger" class="btn btn-primary-red btn-block">
-                        ► DISPATCH VALIDATION ROUND
-                    </button>
-
-                    <!-- Static AST Gate Tester -->
-                    <div class="control-group" style="margin-top: 12px; border-top: 3px solid var(--border); padding-top: 20px;">
-                        <label class="control-label" for="gate-test-code">STATIC AST GATE AUDITOR (ZERO-UNSAFE TESTER)</label>
-                        <textarea id="gate-test-code" class="bauhaus-textarea" spellcheck="false">// Paste or edit Rust snippet to test zero-tolerance static gates:
-pub fn reverse_bytes(buf: &mut [u8]) {
-    buf.reverse();
-}</textarea>
-                        <button id="btn-gate" class="btn btn-primary-yellow btn-block" style="margin-top: 8px;">
-                            ⚡ RUN ZERO-TOLERANCE GATE CHECK
-                        </button>
-                    </div>
-
-                    <!-- Gate Feedback Output -->
-                    <div id="gate-feedback"></div>
-                </div>
-            </section>
-
-            <!-- RIGHT: METAGRAPH LEADERBOARD -->
-            <section class="bauhaus-panel">
-                <div class="panel-header red">
-                    <span class="panel-title">METAGRAPH LEADERBOARD</span>
-                    <span class="panel-badge">REAL-TIME CONSENSUS</span>
-                </div>
-                <div class="panel-body" style="padding: 20px;">
-                    <div class="table-wrapper">
-                        <table class="bauhaus-table" id="leaderboard-table">
-                            <thead>
-                                <tr>
-                                    <th style="width: 50px;">UID</th>
-                                    <th>HOTKEY</th>
-                                    <th>ROLE</th>
-                                    <th>AVG SCORE</th>
-                                    <th>STATUS</th>
-                                </tr>
-                            </thead>
-                            <tbody id="leaderboard-body">
-                                <tr>
-                                    <td colspan="5" style="text-align: center; color: #888; padding: 24px;">Loading Metagraph state...</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: #555; letter-spacing: 0.08em; display: flex; justify-content: space-between; align-items: center;">
-                        <span>Scoring: Cubed Pass-Rate ($pre_t = (\text{passed}/\text{total})^3$)</span>
-                        <span>EMA Alpha: 0.10</span>
-                    </div>
-                </div>
-            </section>
+                <div class="exit" id="sp-exit"></div>
+            </div>
         </div>
 
-        <!-- ====================================================================
-             BAUHAUS ACCORDION: ANTI-CHEAT & PROTOCOL RULES
-             ==================================================================== -->
-        <section class="accordion-deck">
-            <!-- Accordion 1: 50% Anti-Collusion Rule -->
-            <div class="accordion-item active" id="acc-anti-collusion">
-                <div class="accordion-header">
-                    <span>01 // 50% BREAKER ANTI-COLLUSION SHIELD</span>
-                    <span class="accordion-icon">▼</span>
-                </div>
-                <div class="accordion-content">
-                    <p>
-                        <strong>Mechanism:</strong> Breaker miners generate adversarial boundary inputs to discover discrepancies between translator candidates and the C ground truth.
-                    </p>
-                    <p>
-                        To prevent a cartel of malicious miners from deliberately submitting crashing translations to siphon 100% of emissions to an affiliated Breaker node, the protocol enforces an infallible hard cap:
-                    </p>
-                    <div class="formula-box">
-                        Total_Breaker_Emissions &le; 0.50 &times; Total_Round_Emissions
-                    </div>
-                    <p>
-                        Even if every translator fails the hidden tests, breaker rewards are strictly limited to at most 50%, with the remainder retained in subnet reserve.
-                    </p>
-                </div>
+        <div class="terminal">
+            <div class="bar-top">
+                <div class="lights"><i></i><i></i><i></i></div>
+                <span>validator · miners · sandbox</span>
+                <span id="term-count">0 lines</span>
             </div>
+            <div class="stream" id="stream"></div>
+        </div>
+    </section>
 
-            <!-- Accordion 2: Cubed Pass-Rate Scoring Formula -->
-            <div class="accordion-item" id="acc-scoring">
-                <div class="accordion-header">
-                    <span>02 // CUBED PASS-RATE SCORING ENGINE</span>
-                    <span class="accordion-icon">▼</span>
-                </div>
-                <div class="accordion-content">
-                    <p>
-                        Linear scoring permits lucky or hallucinating miners to survive on partial outputs. Aegis applies a cubic polynomial curve to amplify accuracy differentials:
-                    </p>
-                    <div class="formula-box">
-                        pre_t = (passed_hidden / total_hidden)&sup3; &times; compile_flag &times; gate_flag &times; speed_multiplier
-                    </div>
-                    <p>
-                        <strong>Mathematical Impact:</strong> A miner passing 50% of hidden tests receives only <code>(0.50)&sup3; = 0.1250</code> (an 87.5% penalty). A miner passing 95% receives <code>(0.95)&sup3; = 0.8574</code>. Only full semantic parity achieves peak subnet emission.
-                    </p>
-                </div>
-            </div>
+    <!-- ================================================================ HISTORY -->
+    <section class="section">
+        <div class="sec-head"><h3><i>03</i>Rounds</h3><span class="note">from rounds.jsonl · click a row for the full record</span></div>
+        <div class="table-wrap">
+            <table id="rounds">
+                <thead><tr>
+                    <th>#</th><th>task</th><th>constants</th><th>hidden</th><th>translator_llm</th><th>translator_weak</th><th>translator_cheater</th><th>breaker</th><th>weights</th><th>ledger root</th><th>t</th>
+                </tr></thead>
+                <tbody id="rounds-body"><tr><td colspan="11" style="color:var(--grey)">no rounds yet — dispatch one above</td></tr></tbody>
+            </table>
+        </div>
+    </section>
 
-            <!-- Accordion 3: Six-Tier Zero-Tolerance Static Gate -->
-            <div class="accordion-item" id="acc-gate">
-                <div class="accordion-header">
-                    <span>03 // SIX-TIER ZERO-TOLERANCE STATIC AST GATES</span>
-                    <span class="accordion-icon">▼</span>
+    <!-- ================================================================ LEDGER + LEADERBOARD -->
+    <section class="section">
+        <div class="two">
+            <div>
+                <div class="sec-head"><h3><i>04</i>Ledger</h3><span class="note">content-addressed · merkle-chained</span></div>
+                <div class="ledger-head">
+                    <div><div class="k">height</div><div class="v" id="l-height">0</div></div>
+                    <div><div class="k">objects</div><div class="v" id="l-objects">0</div></div>
+                    <div><div class="k">head root</div><div class="v mono" id="l-head">—</div></div>
                 </div>
-                <div class="accordion-content">
-                    <p>
-                        Before code ever enters a compiler or execution environment, the Validator executes an ultra-fast (&lt;0.05ms) static analysis gate. Submissions are instantly assigned <strong>0.0000</strong> score if any of the following are detected:
-                    </p>
-                    <ul style="margin-left: 24px; margin-bottom: 12px; font-size: 14px; font-weight: 600;">
-                        <li><strong>Unsafe Keyword:</strong> Any occurrence of <code>unsafe { ... }</code> or <code>unsafe fn</code>.</li>
-                        <li><strong>Raw Pointer Dereference:</strong> Use of <code>*const</code>, <code>*mut</code>, or raw address casting.</li>
-                        <li><strong>Inline Assembly:</strong> Direct register or machine instructions via <code>asm!</code> or <code>llvm_asm!</code>.</li>
-                        <li><strong>FFI / External Linking:</strong> Bypass attempts via <code>extern "C"</code> or foreign symbol binds.</li>
-                        <li><strong>Memory Transmutation:</strong> Dangerous memory reinterpretation via <code>std::mem::transmute</code>.</li>
-                        <li><strong>Excessive Binary Footprint:</strong> Inflated ASTs or obfuscated macros exceeding strict byte budgets.</li>
-                    </ul>
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                    <button class="btn small ghost" id="verify">Recompute every root</button>
+                    <span class="note" style="font-family:var(--mono);font-size:11px;color:var(--grey)">python scripts/verify_ledger.py does the same offline</span>
                 </div>
+                <div class="verify-out" id="verify-out"></div>
+                <div class="chain" id="chain" style="margin-top:14px"></div>
             </div>
+            <div>
+                <div class="sec-head"><h3><i>05</i>Emissions</h3><span class="note">EMA α = 0.10 · normalised to Σ = 1</span></div>
+                <div class="table-wrap">
+                    <table id="board">
+                        <thead><tr><th>neuron</th><th>role</th><th>avg score</th><th>on-chain weight</th><th>record</th></tr></thead>
+                        <tbody id="board-body"><tr><td colspan="5" style="color:var(--grey)">—</td></tr></tbody>
+                    </table>
+                </div>
+                <div class="sec-head" style="margin-top:28px"><h3><i>06</i>Gate</h3><span class="note">the &lt;1 ms pre-filter, live</span></div>
+                <textarea class="textarea" id="gate-code" spellcheck="false">#![forbid(unsafe_code)]
+use std::io::{self, Read, Write};
+fn main() -> io::Result<()> {
+    let mut buf = Vec::new();
+    io::stdin().read_to_end(&mut buf)?;
+    buf.reverse();
+    io::stdout().write_all(&buf)
+}</textarea>
+                <div style="margin-top:10px"><button class="btn small" id="gate-run">Run gate</button></div>
+                <div class="gate-out" id="gate-out"></div>
+            </div>
+        </div>
+    </section>
 
-            <!-- Accordion 4: Isolated Compiler Sandbox Pipeline -->
-            <div class="accordion-item" id="acc-sandbox">
-                <div class="accordion-header">
-                    <span>04 // DUAL-TARGET ISOLATED COMPILER PIPELINE</span>
-                    <span class="accordion-icon">▼</span>
-                </div>
-                <div class="accordion-content">
-                    <p>
-                        Every validation round executes both the reference C harness and translated Rust candidates in hardened containerized sandboxes or isolated child processes:
-                    </p>
-                    <div class="formula-box">
-                        C Ground Truth: gcc -O2 -fsanitize=address,undefined<br>
-                        Rust Candidate: rustc --edition 2021 -O (RLIMIT_AS=512MB, RLIMIT_CPU=2s)
-                    </div>
-                    <p>
-                        Hidden test inputs are generated dynamically using per-round cryptographically isolated seeds, preventing memorization or test replay attacks.
-                    </p>
-                </div>
+    <!-- ================================================================ RULES -->
+    <section class="section">
+        <div class="sec-head"><h3><i>07</i>Mechanism</h3><span class="note">what the validator enforces, exactly as coded</span></div>
+        <div class="rules">
+            <div>
+                <h4><i>§1</i>Translator score</h4>
+                <div class="f">pre_t = (passed / total)³</div>
+                <p>Gate fail, rustc fail or &gt;64 KB source → 0. Cubing makes 90% correct worth 0.73 and 50% worth 0.125: partial translations are not a business.</p>
             </div>
-        </section>
+            <div>
+                <h4><i>§2</i>Breaker bounty</h4>
+                <div class="f">bounty = 0.5 · pre_t / |B_t|</div>
+                <p>A broken translator's score becomes 0 and half of what it would have earned is split among the breakers that broke it. Planting a bug and "finding" it with a second hotkey nets −0.5·pre_t. Collusion loses money.</p>
+            </div>
+            <div>
+                <h4><i>§3</i>Valid input</h4>
+                <div class="f">ASan+UBSan clean · no crash · no timeout</div>
+                <p>Every breaker input first runs on the sanitizer build of the C reference. UB farming is rejected and penalised (−0.05 each). Non-zero exit codes are legitimate behaviour and must be matched.</p>
+            </div>
+            <div>
+                <h4><i>§4</i>Sandbox</h4>
+                <div class="f">--network none · --read-only · --cap-drop ALL · 256 MB · 1 CPU · uid 65534</div>
+                <p>Candidates compile and run in a throwaway container (or the host toolchain in dev). stdout bytes and exit codes are compared; nothing else is trusted.</p>
+            </div>
+        </div>
+    </section>
 
-        <!-- ====================================================================
-             LIVE AUDIT STREAM / TERMINAL PANEL
-             ==================================================================== -->
-        <section class="terminal-panel">
-            <div class="terminal-header">
-                <div class="terminal-controls">
-                    <div class="term-btn red" title="Close"></div>
-                    <div class="term-btn blue" title="Minimize"></div>
-                    <div class="term-btn yellow" title="Maximize"></div>
-                </div>
-                <div class="terminal-title">TERMINAL // SYSTEM AUDIT TRAIL &amp; CONSENSUS TELEMETRY</div>
-                <div style="font-family: var(--font-mono); font-size: 11px; font-weight: 700;">BUFFER: 100 LINES</div>
-            </div>
-            <div class="terminal-window" id="terminal-stream">
-                <div class="terminal-line"><span class="dim">[INIT]</span> Aegis Subnet Command Center initialized.</div>
-                <div class="terminal-line"><span class="blue">[INFO]</span> Connected to Subtensor mock metagraph (netuid: 1).</div>
-                <div class="terminal-line"><span class="yellow">[READY]</span> Validator and 4 neuron nodes online. Ready for validation rounds.</div>
-            </div>
-        </section>
+    <footer>
+        <div class="shapes"><span class="g-circle" style="width:14px;height:14px"></span><span class="g-square" style="width:14px;height:14px"></span><span class="g-tri" style="border-left-width:7px;border-right-width:7px;border-bottom-width:14px"></span></div>
+        <div>Aegis · Bittensor Global Subnet Hackathon · every number on this page came out of a compiler</div>
+    </footer>
+</div>
 
-        <!-- ====================================================================
-             CONSTRUCTIVIST BAUHAUS FOOTER
-             ==================================================================== -->
-        <footer class="bauhaus-footer">
-            <div class="footer-shapes">
-                <div class="shape-circle" style="width: 16px; height: 16px;"></div>
-                <div class="shape-square" style="width: 16px; height: 16px;"></div>
-                <div class="shape-triangle" style="border-left-width: 8px; border-right-width: 8px; border-bottom-width: 16px;"></div>
-            </div>
-            <div class="footer-copy">
-                AEGIS SUBNET // BITTENSOR PROTOCOL NETWORK // BAUHAUS DESIGN SYSTEM 2026
-            </div>
-        </footer>
-
+<div class="modal" id="modal">
+    <div class="box">
+        <div class="m-head"><h4 id="modal-title">record</h4><button class="btn small ghost" id="modal-close">Close</button></div>
+        <pre id="modal-body"></pre>
     </div>
+</div>
 
-    <!-- Client-side Controller -->
-    <script src="/static/js/dashboard.js"></script>
+<script src="/static/js/dashboard.js?v=2"></script>
 </body>
 </html>
