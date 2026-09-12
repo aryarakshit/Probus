@@ -33,16 +33,20 @@ except Exception:
 # Check if mock mode is explicitly requested
 _ALLOW_MOCK = ("--mock" in sys.argv) or (os.environ.get("AEGIS_MOCK") == "1") or (os.environ.get("FORCE_MOCK_BITTENSOR") == "1")
 
-if _REAL_BITTENSOR and not ("--mock" in sys.argv) and not os.environ.get("FORCE_MOCK_BITTENSOR"):
+if _REAL_BITTENSOR and not _ALLOW_MOCK:
     Synapse = bt.Synapse
     axon = bt.axon
     dendrite = bt.dendrite
-    subtensor = bt.subtensor
     wallet = bt.wallet
     metagraph = bt.metagraph
-    logging = bt.logging
+    bt_logging = bt.logging
     Keypair = getattr(bt, "Keypair", None)
     IS_MOCK = False
+    logger.info("[substrate] Using the real bittensor SDK (network mode).")
+
+    def subtensor(network: str = "finney", netuid: int = 1):
+        """The real Subtensor is not scoped to a netuid; neurons pass one for the mock's sake."""
+        return bt.subtensor(network=network)
 elif _ALLOW_MOCK:
     IS_MOCK = True
     logger.info("[substrate] Initializing high-fidelity Mock Bittensor substrate engine (--mock enabled).")

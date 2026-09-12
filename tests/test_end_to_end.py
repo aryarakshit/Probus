@@ -5,7 +5,7 @@ Validates all phases:
 2. Cubed pass-rate formula and 50% anti-collusion rule
 3. Secret sanitizer-verified hidden test generation
 4. Adversarial breaker fuzzer raw byte synthesis
-5. Full round execution across honest, weak, cheater, and breaker neurons
+5. Full round execution across the LLM translator (stubbed model), weak/cheater fixtures, and the breaker
 6. On-chain weight emission and JSONL audit logging
 """
 
@@ -24,6 +24,7 @@ if hasattr(sys.stderr, "reconfigure"):
 os.environ["AEGIS_ALLOW_UNSANDBOXED"] = "1"
 os.environ["AEGIS_MOCK"] = "1"
 
+from tests.helpers import install_stub_llm
 
 import substrate as bt
 from protocol import TranslationSynapse, BreakerSynapse
@@ -54,6 +55,13 @@ class TestAegisSubnetEndToEnd(unittest.TestCase):
         passed, reason = static_analysis_gate(libc_code)
         self.assertFalse(passed)
         self.assertIn("libc", reason.lower())
+
+        exit_code = 'use std::process::ExitCode; fn main() -> ExitCode { ExitCode::from(3) }'
+        passed, reason = static_analysis_gate(exit_code)
+        self.assertTrue(passed, "ExitCode is the sanctioned non-zero exit path")
+
+        hidden_exit = 'fn main() { std::process::exit(1) }'
+        self.assertFalse(static_analysis_gate(hidden_exit)[0])
 
         safe_code = '#![forbid(unsafe_code)]\nfn main() {}'
         passed, reason = static_analysis_gate(safe_code)
@@ -93,21 +101,29 @@ class TestAegisSubnetEndToEnd(unittest.TestCase):
         syn = BreakerSynapse(c_code=task.c_code, rust_code=task.weak_rust, task_name=task.task_name, num_inputs_requested=10)
         resp = breaker.forward(syn)
         raw = resp.get_raw_inputs()
-        
+
         self.assertGreaterEqual(len(raw), 5)
-        self.assertIn(b"\x00", raw)
+        self.assertEqual(resp.input_encoding, "base64")
+        self.assertGreater(len(breaker.last_report["divergences"]), 0, "breaker should break the weak fixture")
 
     def test_05_validator_round_with_miners(self):
-        """Verify full round execution across Honest, Weak, Cheater, and Breaker."""
+        """Verify a full round: stubbed-model translator repairs itself, fixtures are gated/broken, ledger commits."""
+        import tempfile
         v_args = parse_val_args(["--mock"])
         v_args.wallet_hotkey = "unit_val"
         v_args.no_docker = True
+        v_args.log_file = os.path.join(tempfile.gettempdir(), "aegis_test_rounds.jsonl")
+        v_args.ledger_dir = tempfile.mkdtemp(prefix="aegis_test_ledger_")
+        import shutil
+        self.addCleanup(shutil.rmtree, v_args.ledger_dir, True)
+        self.addCleanup(lambda: os.path.exists(v_args.log_file) and os.remove(v_args.log_file))
         val = Validator(v_args)
 
-        # Spawn honest, weak, and cheater miners
-        m_h_args = parse_tr_args(["--mock"])
+        # Spawn the real (stubbed-model) translator plus weak and cheater fixtures
+        stub = install_stub_llm(buggy_first=True)
+        m_h_args = parse_tr_args(["--mock", "--self_fuzz_seconds", "3"])
         m_h_args.wallet_hotkey = "unit_honest"
-        m_h_args.mode = "honest"
+        m_h_args.mode = "llm"
         m_honest = TranslatorMiner(m_h_args).run()
 
         m_w_args = parse_tr_args(["--mock"])
@@ -120,7 +136,7 @@ class TestAegisSubnetEndToEnd(unittest.TestCase):
         m_c_args.mode = "cheater"
         m_cheater = TranslatorMiner(m_c_args).run()
 
-        b_args = parse_br_args(["--mock"])
+        b_args = parse_br_args(["--mock", "--fuzz_seconds", "6"])
         b_args.wallet_hotkey = "unit_breaker"
         m_breaker = BreakerMiner(b_args).run()
 
@@ -140,6 +156,13 @@ class TestAegisSubnetEndToEnd(unittest.TestCase):
         self.assertGreater(scores["unit_breaker"], 0.0)
         # Weak broken -> score = 0.0
         self.assertEqual(scores["unit_weak"], 0.0)
+        # The LLM miner had to repair its first draft
+        self.assertEqual(stub.calls, 2)
+        # Round is committed to the ledger and verifies
+        self.assertIn("root", res["log_entry"]["ledger"])
+        self.assertTrue(val.ledger.verify()["ok"])
+        # Reproducer recorded for the broken translator
+        self.assertGreater(len(res["log_entry"]["translator_evals"]["unit_weak"]["reproducers"]), 0)
 
 
 if __name__ == "__main__":
