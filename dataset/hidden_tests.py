@@ -95,14 +95,21 @@ def generate_sanitizer_verified_hidden_tests(
     seed: Optional[int] = None
 ) -> List[bytes]:
     """
-    Generates hidden test suite and verifies each candidate on ref_san (ASan+UBSan).
-    Any input that triggers sanitizer reports or non-zero exits on C reference is dropped.
+    Generates the hidden test suite and verifies each candidate on ref_san (ASan+UBSan).
+    Inputs that trigger sanitizer diagnostics, crash, or time out are dropped; inputs that
+    make the reference exit non-zero are kept - error paths are part of the contract.
     """
     if seed is None:
         seed = secrets.randbits(64)
 
-    # Generate extra candidates to allow dropping invalid ones
-    candidates = generate_raw_hidden_tests(count=count + 15, seed=seed)
+    # Structural boundary probes derived from the constants in this round's C source
+    # (n-1, n, n+1, 2n ... for every #define and array size), then seeded random fuzz.
+    from neurons.difffuzz import boundary_seeds
+    structural = boundary_seeds(c_code)
+    rng = random.Random(seed)
+    rng.shuffle(structural)
+    keep = max(4, count // 3)
+    candidates = structural[:keep] + generate_raw_hidden_tests(count=count + 15, seed=seed)
 
     # Run sanitizer check
     san_results = sandbox_runner.run_sanitizer_precheck(c_code, candidates, timeout=2.0)

@@ -5,6 +5,7 @@ matching Safe Rust reference implementations, weak flawed variants,
 and adversarial test case generators.
 """
 
+import re
 import random
 import string
 import struct
@@ -39,14 +40,14 @@ C_BINARY_IO_HEADER = """#ifdef _WIN32
 """
 
 
-def make_reverse_bytes_task(seed: int) -> TaskInstance:
+def make_reverse_bytes_task(seed: int, constants: Dict[str, Any] = None) -> TaskInstance:
     """
     Task 1: reverse_bytes
     Inverts byte order of consecutive chunks of CHUNK_SIZE bytes.
     Forces raw byte handling (null bytes, invalid UTF-8) vs char decoding.
     """
     rng = random.Random(seed)
-    chunk_size = rng.choice([2, 3, 4, 5, 7, 8])
+    chunk_size = (constants or {}).get("chunk_size") or rng.choice([2, 3, 4, 5, 7, 8])
 
     c_code = f"""#include <stdio.h>
 #include <stdlib.h>
@@ -193,14 +194,14 @@ fn main() -> io::Result<()> {{
     )
 
 
-def make_rle_encode_task(seed: int) -> TaskInstance:
+def make_rle_encode_task(seed: int, constants: Dict[str, Any] = None) -> TaskInstance:
     """
     Task 2: rle_encode
     Encodes repeated consecutive bytes as [count: 1 byte][value: 1 byte].
     Splits runs larger than MAX_RUN.
     """
     rng = random.Random(seed)
-    max_run = rng.choice([16, 32, 64, 128, 255])
+    max_run = (constants or {}).get("max_run") or rng.choice([16, 32, 64, 128, 255])
 
     c_code = f"""#include <stdio.h>
 #include <stdint.h>
@@ -345,15 +346,15 @@ fn main() -> io::Result<()> {{
     )
 
 
-def make_fnv1a_lines_task(seed: int) -> TaskInstance:
+def make_fnv1a_lines_task(seed: int, constants: Dict[str, Any] = None) -> TaskInstance:
     """
     Task 3: fnv1a_lines
     Computes 32-bit FNV-1a hash of each line in stdin.
     Tests uint32 wraparound, empty lines, CRLF vs LF, no trailing newline.
     """
     rng = random.Random(seed)
-    offset_basis = rng.choice([2166136261, 2166136267, 2166136279])
-    prime = rng.choice([16777619, 16777621, 16777627])
+    offset_basis = (constants or {}).get("offset_basis") or rng.choice([2166136261, 2166136267, 2166136279])
+    prime = (constants or {}).get("prime") or rng.choice([16777619, 16777621, 16777627])
 
     c_code = f"""#include <stdio.h>
 #include <stdint.h>
@@ -479,13 +480,13 @@ fn main() -> io::Result<()> {{
     )
 
 
-def make_crc32_task(seed: int) -> TaskInstance:
+def make_crc32_task(seed: int, constants: Dict[str, Any] = None) -> TaskInstance:
     """
     Task 4: crc32
     Computes standard 32-bit CRC bitwise over all stdin bytes.
     """
     rng = random.Random(seed)
-    poly = rng.choice([0xEDB88320, 0x82F63B78, 0xEB31D82E])
+    poly = (constants or {}).get("poly") or rng.choice([0xEDB88320, 0x82F63B78, 0xEB31D82E])
 
     c_code = f"""#include <stdio.h>
 #include <stdint.h>
@@ -543,12 +544,18 @@ fn main() -> io::Result<()> {{
 }}
 """
 
+    # Porting bug: the translator assumed a fixed 4 KB input buffer, so anything past
+    # byte 4096 is silently ignored. Every hidden test is shorter than that; only an
+    # adversary that reads the Rust and probes the 4096 boundary will notice.
     weak_rust = f"""#![forbid(unsafe_code)]
 use std::io::{{self, Read}};
+
+const BUF_SIZE: usize = 4096;
 
 fn main() -> io::Result<()> {{
     let mut buffer = Vec::new();
     io::stdin().read_to_end(&mut buffer)?;
+    buffer.truncate(BUF_SIZE);
     let poly: u32 = {poly};
     let mut crc: u32 = 0xFFFFFFFF;
     for &byte in &buffer {{
@@ -561,7 +568,7 @@ fn main() -> io::Result<()> {{
             }}
         }}
     }}
-    // Flawed: forgets final XOR inversion
+    crc ^= 0xFFFFFFFF;
     println!("{{:08X}}", crc);
     Ok(())
 }}
@@ -604,23 +611,77 @@ fn main() -> io::Result<()> {{
     )
 
 
+# ---------------------------------------------------------------------------
+# Registry
+# ---------------------------------------------------------------------------
+# name -> (factory, {constant_name: regex that recovers it from the C source})
+# The regexes let dataset/fixtures.py rebuild the exact task instance a miner
+# received from nothing but the C code, so benchmark fixtures stay in sync with
+# the per-round constants the validator sampled.
+TASK_REGISTRY: Dict[str, Tuple[Any, Dict[str, str]]] = {
+    "reverse_bytes": (make_reverse_bytes_task, {"chunk_size": r"#define\s+CHUNK_SIZE\s+(\d+)"}),
+    "rle_encode":    (make_rle_encode_task,    {"max_run": r"#define\s+MAX_RUN\s+(\d+)"}),
+    "fnv1a_lines":   (make_fnv1a_lines_task,   {"offset_basis": r"#define\s+OFFSET_BASIS\s+(\d+)U?",
+                                                "prime": r"#define\s+FNV_PRIME\s+(\d+)U?"}),
+    "crc32":         (make_crc32_task,         {"poly": r"#define\s+POLY\s+(\d+)U?"}),
+}
+
+TASK_DESCRIPTIONS: Dict[str, str] = {
+    "reverse_bytes": "Reverse fixed-size byte chunks (raw-byte handling, tail chunk)",
+    "rle_encode":    "Run-length encode with a max run (counter overflow at the boundary)",
+    "fnv1a_lines":   "FNV-1a hash per line (wrapping u32 arithmetic, trailing-newline rules)",
+    "crc32":         "Bitwise CRC-32 with a per-round polynomial (shift/xor semantics)",
+}
+
+try:  # real-world-shaped programs live in their own module
+    from dataset.tasks_extended import EXTENDED_REGISTRY, EXTENDED_DESCRIPTIONS
+    TASK_REGISTRY.update(EXTENDED_REGISTRY)
+    TASK_DESCRIPTIONS.update(EXTENDED_DESCRIPTIONS)
+except ImportError:
+    pass
+
+
+def list_tasks() -> List[str]:
+    return list(TASK_REGISTRY.keys())
+
+
+def build_task(task_name: str, constants: Dict[str, Any] = None, seed: int = 0) -> TaskInstance:
+    factory, _ = TASK_REGISTRY[task_name]
+    return factory(seed, constants=constants)
+
+
+def infer_task(c_code: str) -> Tuple[str, Dict[str, Any]]:
+    """Recover (task_name, constants) from a C source produced by this pool."""
+    # The validator stamps `// aegis-task: <name>` on every sampled program; without the stamp,
+    # fall back to the constant names, which are unique per task.
+    marker = re.search(r"//\s*aegis-task:\s*([a-z0-9_]+)", c_code)
+    candidates = [marker.group(1)] if marker and marker.group(1) in TASK_REGISTRY else list(TASK_REGISTRY)
+    for name in candidates:
+        _, regexes = TASK_REGISTRY[name]
+        consts: Dict[str, Any] = {}
+        for cname, rx in regexes.items():
+            m = re.search(rx, c_code)
+            if not m:
+                break
+            raw = m.group(1)
+            consts[cname] = int(raw, 16) if raw.lower().startswith("0x") else int(raw)
+        else:
+            return name, consts
+    raise ValueError("C source does not match any task in the pool")
+
+
 def sample_task(task_name: str = None, seed: int = None) -> TaskInstance:
     """Sample a parameterized task from the pool."""
     if seed is None:
         import secrets
         seed = secrets.randbits(32)
-
     rng = random.Random(seed)
-    task_factories = {
-        "reverse_bytes": make_reverse_bytes_task,
-        "rle_encode": make_rle_encode_task,
-        "fnv1a_lines": make_fnv1a_lines_task,
-        "crc32": make_crc32_task,
-    }
-
-    if task_name and task_name in task_factories:
-        factory = task_factories[task_name]
+    if task_name and task_name in TASK_REGISTRY:
+        factory = TASK_REGISTRY[task_name][0]
     else:
-        factory = rng.choice(list(task_factories.values()))
-
-    return factory(seed)
+        factory = rng.choice([f for f, _ in TASK_REGISTRY.values()])
+    inst = factory(seed)
+    # Stamp the task name into the C source so fixtures and dashboards can identify it.
+    if "aegis-task:" not in inst.c_code:
+        inst.c_code = "// aegis-task: " + inst.task_name + "\n" + inst.c_code
+    return inst
