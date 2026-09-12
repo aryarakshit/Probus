@@ -2,7 +2,7 @@
 Sandbox Runner for C-to-Safe-Rust Subnet (sandbox/sandbox_runner.py).
 Strictly isolated compilation and differential execution.
 Supports Docker (--network none, --read-only, --cap-drop ALL, memory/pid limits)
-and a dev-only native compiler pipeline via AEGIS_ALLOW_UNSANDBOXED=1.
+and a dev-only native compiler pipeline via PROBUS_ALLOW_UNSANDBOXED=1.
 NEVER uses emulators or simulated string-matching results.
 """
 
@@ -76,13 +76,13 @@ class SandboxRunner:
         self.docker_image = docker_image
         self.docker_available = _check_docker()
         
-        allow_unsandboxed = force_unsandboxed or (os.environ.get("AEGIS_ALLOW_UNSANDBOXED") == "1")
+        allow_unsandboxed = force_unsandboxed or (os.environ.get("PROBUS_ALLOW_UNSANDBOXED") == "1")
 
         if not self.docker_available and not allow_unsandboxed:
             raise RuntimeError(
-                "Docker is not available and AEGIS_ALLOW_UNSANDBOXED=1 is not set. "
+                "Docker is not available and PROBUS_ALLOW_UNSANDBOXED=1 is not set. "
                 "Refusing to run untrusted code without container sandbox. "
-                "Set AEGIS_ALLOW_UNSANDBOXED=1 only for local development."
+                "Set PROBUS_ALLOW_UNSANDBOXED=1 only for local development."
             )
 
         self.use_docker = self.docker_available and not force_unsandboxed
@@ -116,7 +116,7 @@ class SandboxRunner:
             c_flags = ["-std=c11", "-O2"]
 
         if self.use_docker:
-            container_name = f"aegis_compile_c_{uuid.uuid4().hex[:8]}"
+            container_name = f"probus_compile_c_{uuid.uuid4().hex[:8]}"
             cmd = [
                 "docker", "run", "--rm", "--name", container_name,
                 "--network", "none",
@@ -179,7 +179,7 @@ class SandboxRunner:
         ]
 
         if self.use_docker:
-            container_name = f"aegis_compile_rs_{uuid.uuid4().hex[:8]}"
+            container_name = f"probus_compile_rs_{uuid.uuid4().hex[:8]}"
             cmd = [
                 "docker", "run", "--rm", "--name", container_name,
                 "--network", "none",
@@ -225,7 +225,7 @@ class SandboxRunner:
         raw_inputs = [i.encode("utf-8") if isinstance(i, str) else bytes(i) for i in test_inputs]
         
         if self.use_docker:
-            container_name = f"aegis_run_{uuid.uuid4().hex[:8]}"
+            container_name = f"probus_run_{uuid.uuid4().hex[:8]}"
             bundle_path = os.path.join(work_dir, "inputs.bin")
             write_input_bundle(bundle_path, raw_inputs)
 
@@ -291,7 +291,7 @@ class SandboxRunner:
         Executes test inputs on ref_san (AddressSanitizer + UndefinedBehaviorSanitizer build).
         Inputs that crash, timeout, or trigger sanitizers are flagged as invalid (UB).
         """
-        temp_dir = tempfile.mkdtemp(prefix="aegis_san_")
+        temp_dir = tempfile.mkdtemp(prefix="probus_san_")
         try:
             ok, bin_path, err = self.compile_c(c_code, temp_dir, output_name="ref_san", sanitizer=True)
             if not ok:
@@ -364,8 +364,8 @@ class SandboxRunner:
             }
 
         # 1. Compile C reference in C temp dir
-        c_temp_dir = tempfile.mkdtemp(prefix="aegis_c_")
-        rs_temp_dir = tempfile.mkdtemp(prefix="aegis_rs_")
+        c_temp_dir = tempfile.mkdtemp(prefix="probus_c_")
+        rs_temp_dir = tempfile.mkdtemp(prefix="probus_rs_")
 
         try:
             c_ok, c_bin, c_err = self.compile_c(c_code, c_temp_dir, output_name="c_ref", sanitizer=False)

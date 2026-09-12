@@ -1,5 +1,5 @@
 """
-Aegis Subnet command center (server.py)
+Probus Subnet command center (server.py)
 
 FastAPI backend for the dashboard. Hosts a validator and four neurons on the mock
 substrate, runs rounds in a background thread, and streams every validator
@@ -30,8 +30,8 @@ sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-os.environ.setdefault("AEGIS_ALLOW_UNSANDBOXED", "1")
-os.environ.setdefault("AEGIS_MOCK", "1")
+os.environ.setdefault("PROBUS_ALLOW_UNSANDBOXED", "1")
+os.environ.setdefault("PROBUS_MOCK", "1")
 
 from neurons.miner_translator import TranslatorMiner, parse_args as parse_tr_args
 from neurons.miner_breaker import BreakerMiner, parse_args as parse_br_args
@@ -42,8 +42,8 @@ from neurons.ledger import Ledger
 from dataset.tasks import sample_task, list_tasks, TASK_DESCRIPTIONS
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-ROUNDS_LOG = os.environ.get("AEGIS_ROUNDS_LOG") or os.path.join(BASE_DIR, "rounds.jsonl")
-LEDGER_DIR = os.environ.get("AEGIS_LEDGER_DIR")  # None -> ./ledger
+ROUNDS_LOG = os.environ.get("PROBUS_ROUNDS_LOG") or os.path.join(BASE_DIR, "rounds.jsonl")
+LEDGER_DIR = os.environ.get("PROBUS_LEDGER_DIR")  # None -> ./ledger
 REPLAY_SEEDS = [101, 202, 303]
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s")
@@ -55,7 +55,7 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="Aegis Subnet", version="2.0.0", lifespan=lifespan)
+app = FastAPI(title="Probus Subnet", version="2.0.0", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 
 
@@ -360,7 +360,7 @@ def dashboard():
 
 def main():
     import uvicorn
-    logger.info("Aegis command center on http://127.0.0.1:8000")
+    logger.info("Probus command center on http://127.0.0.1:8000")
     uvicorn.run(app, host="127.0.0.1", port=8000, log_level="warning")
 
 

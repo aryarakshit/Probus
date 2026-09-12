@@ -1,5 +1,5 @@
 """
-Provider-agnostic LLM client for Aegis miners (neurons/llm.py).
+Provider-agnostic LLM client for Probus miners (neurons/llm.py).
 
 Miners on a decentralized subnet pick their own model, so this module speaks to
 several backends behind one interface:
@@ -12,8 +12,8 @@ several backends behind one interface:
 
 Two switches matter for demos:
 
-    AEGIS_LLM_RECORD=1  - write every live response to dataset/llm_replay/
-    AEGIS_LLM_REPLAY=1  - serve responses from dataset/llm_replay/ instead of a
+    PROBUS_LLM_RECORD=1  - write every live response to dataset/llm_replay/
+    PROBUS_LLM_REPLAY=1  - serve responses from dataset/llm_replay/ instead of a
                           provider (used when no credentials are present so the
                           demo replays *real* recorded model output, never a
                           hand-written answer key). Replay files carry provider,
@@ -80,8 +80,8 @@ def _prompt_hash(provider: str, model: str, system: str, user: str) -> str:
 
 
 def detect_provider() -> Optional[str]:
-    """Pick a provider from AEGIS_LLM_PROVIDER or from whichever credential is present."""
-    forced = os.environ.get("AEGIS_LLM_PROVIDER", "").strip().lower()
+    """Pick a provider from PROBUS_LLM_PROVIDER or from whichever credential is present."""
+    forced = os.environ.get("PROBUS_LLM_PROVIDER", "").strip().lower()
     if forced:
         return forced
     if _STUB_FN is not None:
@@ -100,10 +100,10 @@ def detect_provider() -> Optional[str]:
 class LLMClient:
     def __init__(self, provider: Optional[str] = None, model: Optional[str] = None, timeout: float = 120.0):
         self.provider = provider or detect_provider()
-        self.model = model or os.environ.get("AEGIS_LLM_MODEL") or DEFAULT_MODELS.get(self.provider or "", "")
+        self.model = model or os.environ.get("PROBUS_LLM_MODEL") or DEFAULT_MODELS.get(self.provider or "", "")
         self.timeout = timeout
-        self.record = os.environ.get("AEGIS_LLM_RECORD") == "1"
-        self.replay = os.environ.get("AEGIS_LLM_REPLAY") == "1" or self.provider is None
+        self.record = os.environ.get("PROBUS_LLM_RECORD") == "1"
+        self.replay = os.environ.get("PROBUS_LLM_REPLAY") == "1" or self.provider is None
         self._anthropic = None
 
     @property
@@ -232,7 +232,7 @@ class LLMClient:
         # Haiku 4.5 still uses the budget form; every current Opus/Sonnet takes adaptive.
         if not self.model.startswith("claude-haiku"):
             kwargs["thinking"] = {"type": "adaptive"}
-            kwargs["output_config"] = {"effort": os.environ.get("AEGIS_LLM_EFFORT", "high")}
+            kwargs["output_config"] = {"effort": os.environ.get("PROBUS_LLM_EFFORT", "high")}
         with self._anthropic.messages.stream(**kwargs) as stream:
             msg = stream.get_final_message()
         if msg.stop_reason == "refusal":

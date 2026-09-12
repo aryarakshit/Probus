@@ -10,8 +10,8 @@ import sys
 import unittest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-os.environ.setdefault("AEGIS_ALLOW_UNSANDBOXED", "1")
-os.environ.setdefault("AEGIS_MOCK", "1")
+os.environ.setdefault("PROBUS_ALLOW_UNSANDBOXED", "1")
+os.environ.setdefault("PROBUS_MOCK", "1")
 
 from neurons.miner_breaker import BreakerMiner, parse_args
 from neurons.difffuzz import LocalDiff

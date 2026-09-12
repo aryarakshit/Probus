@@ -2,7 +2,7 @@
 Record real model output for offline replay (scripts/record_translations.py)
 
 Runs the LLM translator against every task in the pool for a fixed set of seeds
-with AEGIS_LLM_RECORD=1, so the raw responses (including the repair rounds and
+with PROBUS_LLM_RECORD=1, so the raw responses (including the repair rounds and
 any failures) land in dataset/llm_replay/ with provider, model, prompt hash and
 timestamp. A machine without credentials can then run the demo and dashboard
 against genuine model output instead of a hand-written answer key.
@@ -17,9 +17,9 @@ import time
 import argparse
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-os.environ.setdefault("AEGIS_ALLOW_UNSANDBOXED", "1")
-os.environ.setdefault("AEGIS_MOCK", "1")
-os.environ["AEGIS_LLM_RECORD"] = "1"
+os.environ.setdefault("PROBUS_ALLOW_UNSANDBOXED", "1")
+os.environ.setdefault("PROBUS_MOCK", "1")
+os.environ["PROBUS_LLM_RECORD"] = "1"
 
 from neurons.llm import LLMClient
 from neurons.miner_translator import TranslatorMiner, parse_args

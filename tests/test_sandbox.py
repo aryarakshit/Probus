@@ -8,7 +8,7 @@ Acceptance Criteria:
 5. Embedded null-byte (\\x00) works via stdin without argv crash
 6. Output size cap is enforced
 7. Per-test timeout terminates hanging execution
-8. No Docker without AEGIS_ALLOW_UNSANDBOXED=1 raises hard error
+8. No Docker without PROBUS_ALLOW_UNSANDBOXED=1 raises hard error
 """
 
 import sys
@@ -19,7 +19,7 @@ import unittest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # Enable unsandboxed mode for test execution on host toolchain
-os.environ["AEGIS_ALLOW_UNSANDBOXED"] = "1"
+os.environ["PROBUS_ALLOW_UNSANDBOXED"] = "1"
 
 from sandbox.sandbox_runner import SandboxRunner
 from dataset.tasks import sample_task
@@ -132,8 +132,8 @@ class TestSandbox(unittest.TestCase):
         self.assertEqual(res["pass_rate"], 1.0)
 
     def test_08_no_docker_without_escape_hatch_raises_error(self):
-        """Running without Docker and without AEGIS_ALLOW_UNSANDBOXED=1 must raise RuntimeError."""
-        old_val = os.environ.pop("AEGIS_ALLOW_UNSANDBOXED", None)
+        """Running without Docker and without PROBUS_ALLOW_UNSANDBOXED=1 must raise RuntimeError."""
+        old_val = os.environ.pop("PROBUS_ALLOW_UNSANDBOXED", None)
         try:
             # Force non-docker check
             if not self.runner.docker_available:
@@ -141,7 +141,7 @@ class TestSandbox(unittest.TestCase):
                     SandboxRunner(force_unsandboxed=False)
         finally:
             if old_val:
-                os.environ["AEGIS_ALLOW_UNSANDBOXED"] = old_val
+                os.environ["PROBUS_ALLOW_UNSANDBOXED"] = old_val
 
 
 if __name__ == "__main__":

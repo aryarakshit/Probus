@@ -1,5 +1,5 @@
 """
-Master End-to-End Test Suite for Aegis Subnet (tests/test_end_to_end.py)
+Master End-to-End Test Suite for Probus Subnet (tests/test_end_to_end.py)
 Validates all phases:
 1. Static analysis pre-filters and rustc -F unsafe_code gate
 2. Cubed pass-rate formula and 50% anti-collusion rule
@@ -21,8 +21,8 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
-os.environ["AEGIS_ALLOW_UNSANDBOXED"] = "1"
-os.environ["AEGIS_MOCK"] = "1"
+os.environ["PROBUS_ALLOW_UNSANDBOXED"] = "1"
+os.environ["PROBUS_MOCK"] = "1"
 
 from tests.helpers import install_stub_llm
 
@@ -37,7 +37,7 @@ from neurons.validator import Validator, static_analysis_gate, parse_args as par
 from neurons.scoring import calculate_translator_pre_score, score_round
 
 
-class TestAegisSubnetEndToEnd(unittest.TestCase):
+class TestProbusSubnetEndToEnd(unittest.TestCase):
 
     def test_01_static_analysis_hard_gates(self):
         """Verify strict static gates block unsafe, process commands, libc, and pass safe code."""
@@ -112,8 +112,8 @@ class TestAegisSubnetEndToEnd(unittest.TestCase):
         v_args = parse_val_args(["--mock"])
         v_args.wallet_hotkey = "unit_val"
         v_args.no_docker = True
-        v_args.log_file = os.path.join(tempfile.gettempdir(), "aegis_test_rounds.jsonl")
-        v_args.ledger_dir = tempfile.mkdtemp(prefix="aegis_test_ledger_")
+        v_args.log_file = os.path.join(tempfile.gettempdir(), "probus_test_rounds.jsonl")
+        v_args.ledger_dir = tempfile.mkdtemp(prefix="probus_test_ledger_")
         import shutil
         self.addCleanup(shutil.rmtree, v_args.ledger_dir, True)
         self.addCleanup(lambda: os.path.exists(v_args.log_file) and os.remove(v_args.log_file))

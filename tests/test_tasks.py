@@ -10,7 +10,7 @@ import random
 import unittest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-os.environ.setdefault("AEGIS_ALLOW_UNSANDBOXED", "1")
+os.environ.setdefault("PROBUS_ALLOW_UNSANDBOXED", "1")
 
 from dataset.tasks import sample_task, list_tasks, infer_task, build_task, TASK_DESCRIPTIONS
 from dataset.hidden_tests import generate_raw_hidden_tests
@@ -30,7 +30,7 @@ class TestTaskPool(unittest.TestCase):
             got_name, consts = infer_task(t.c_code)
             self.assertEqual(got_name, name)
             self.assertEqual(consts, t.constants)
-            stamp = "// aegis-task: " + name + "\n"
+            stamp = "// probus-task: " + name + "\n"
             self.assertEqual(build_task(name, consts).c_code.replace(stamp, ""), t.c_code.replace(stamp, ""))
 
     def test_03_every_task_is_sound(self):

@@ -17,7 +17,7 @@ from neurons import llm
 class TestLLMClient(unittest.TestCase):
     def setUp(self):
         self._env = dict(os.environ)
-        for k in ("AEGIS_LLM_PROVIDER", "AEGIS_LLM_REPLAY", "AEGIS_LLM_RECORD", "AEGIS_LLM_MODEL",
+        for k in ("PROBUS_LLM_PROVIDER", "PROBUS_LLM_REPLAY", "PROBUS_LLM_RECORD", "PROBUS_LLM_MODEL",
                   "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "OPENAI_API_KEY", "GEMINI_API_KEY",
                   "GOOGLE_API_KEY", "OLLAMA_HOST"):
             os.environ.pop(k, None)
@@ -44,14 +44,14 @@ class TestLLMClient(unittest.TestCase):
         c = llm.LLMClient()
         self.assertEqual(c.provider, "anthropic")
         self.assertEqual(c.model, "claude-opus-5")
-        os.environ["AEGIS_LLM_PROVIDER"] = "ollama"
-        os.environ["AEGIS_LLM_MODEL"] = "qwen2.5-coder:32b"
+        os.environ["PROBUS_LLM_PROVIDER"] = "ollama"
+        os.environ["PROBUS_LLM_MODEL"] = "qwen2.5-coder:32b"
         c = llm.LLMClient()
         self.assertEqual((c.provider, c.model), ("ollama", "qwen2.5-coder:32b"))
 
     def test_03_stub_then_record_then_replay(self):
         llm.set_stub(lambda s, u: "```rust\nfn main() {}\n```")
-        os.environ["AEGIS_LLM_RECORD"] = "1"
+        os.environ["PROBUS_LLM_RECORD"] = "1"
         c = llm.LLMClient()
         self.assertEqual(c.provider, "stub")
         res = c.complete("S", "U")
@@ -64,7 +64,7 @@ class TestLLMClient(unittest.TestCase):
         c._save_replay(llm.LLMResult(text="```rust\nfn main() { }\n```", provider="anthropic",
                                      model="claude-opus-5", latency_s=1.2, prompt_sha256=digest), "S", "U")
         llm.set_stub(None)
-        os.environ.pop("AEGIS_LLM_RECORD")
+        os.environ.pop("PROBUS_LLM_RECORD")
         c2 = llm.LLMClient()
         self.assertIsNone(c2.provider)
         rep = c2.complete("S", "U")

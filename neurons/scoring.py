@@ -1,5 +1,5 @@
 """
-Scoring and Incentive Engine for Aegis Subnet (neurons/scoring.py)
+Scoring and Incentive Engine for Probus Subnet (neurons/scoring.py)
 Implements:
 1. Cubed pass-rate formula for translators: pre_t = (passed_hidden / total_hidden) ** 3
 2. Sanitizer-verified validity for Breaker inputs (prevention of UB farming)

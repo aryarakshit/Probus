@@ -185,7 +185,7 @@ class LocalDiff:
     def __init__(self, c_code: str, rust_code: Optional[str] = None, timeout: float = 2.0):
         self.c_code = c_code
         self.timeout = timeout
-        self.work = tempfile.mkdtemp(prefix="aegis_fuzz_")
+        self.work = tempfile.mkdtemp(prefix="probus_fuzz_")
         self.rustc_extra = _get_rustc_extra_args()
         self.c_bin: Optional[str] = None
         self.c_san: Optional[str] = None

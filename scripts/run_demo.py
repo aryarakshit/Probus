@@ -29,8 +29,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-os.environ.setdefault("AEGIS_ALLOW_UNSANDBOXED", "1")
-os.environ.setdefault("AEGIS_MOCK", "1")
+os.environ.setdefault("PROBUS_ALLOW_UNSANDBOXED", "1")
+os.environ.setdefault("PROBUS_MOCK", "1")
 
 from neurons.miner_translator import TranslatorMiner, parse_args as parse_tr_args
 from neurons.miner_breaker import BreakerMiner, parse_args as parse_br_args
@@ -58,7 +58,7 @@ def main():
     ap.add_argument("--docker", action="store_true", help="use the Docker sandbox instead of the host toolchain")
     args = ap.parse_args()
 
-    banner("AEGIS SUBNET - LIVE ADVERSARIAL C-TO-SAFE-RUST VALIDATION")
+    banner("PROBUS SUBNET - LIVE ADVERSARIAL C-TO-SAFE-RUST VALIDATION")
     probe = LLMClient()
     if probe.provider:
         print(f"[LLM] live provider: {probe.describe()}")

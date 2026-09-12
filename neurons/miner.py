@@ -19,7 +19,7 @@ from neurons.miner_breaker import BreakerMiner, parse_args as parse_breaker_args
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Aegis miner", add_help=False)
+    parser = argparse.ArgumentParser(description="Probus miner", add_help=False)
     parser.add_argument("--type", type=str, choices=["translator", "breaker"], default="translator",
                         help="miner role: translator (C -> Safe Rust) or breaker (adversarial fuzzer)")
     role, rest = parser.parse_known_args()

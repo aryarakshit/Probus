@@ -31,7 +31,7 @@ except Exception:
     _REAL_BITTENSOR = False
 
 # Check if mock mode is explicitly requested
-_ALLOW_MOCK = ("--mock" in sys.argv) or (os.environ.get("AEGIS_MOCK") == "1") or (os.environ.get("FORCE_MOCK_BITTENSOR") == "1")
+_ALLOW_MOCK = ("--mock" in sys.argv) or (os.environ.get("PROBUS_MOCK") == "1") or (os.environ.get("FORCE_MOCK_BITTENSOR") == "1")
 
 if _REAL_BITTENSOR and not _ALLOW_MOCK:
     Synapse = bt.Synapse
@@ -269,7 +269,7 @@ elif _ALLOW_MOCK:
 else:
     raise ImportError(
         "Real 'bittensor' package is required for live/testnet operation. "
-        "Install with `pip install bittensor` or specify `--mock` (or set `AEGIS_MOCK=1`) "
+        "Install with `pip install bittensor` or specify `--mock` (or set `PROBUS_MOCK=1`) "
         "to run the local mock substrate simulation."
     )
 

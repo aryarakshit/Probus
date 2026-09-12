@@ -1,5 +1,5 @@
 """
-Parameterized Task Pool for Aegis Subnet (dataset/tasks.py)
+Parameterized Task Pool for Probus Subnet (dataset/tasks.py)
 UB-Free C reference algorithms with per-round constant injection,
 matching Safe Rust reference implementations, weak flawed variants,
 and adversarial test case generators.
@@ -652,9 +652,9 @@ def build_task(task_name: str, constants: Dict[str, Any] = None, seed: int = 0) 
 
 def infer_task(c_code: str) -> Tuple[str, Dict[str, Any]]:
     """Recover (task_name, constants) from a C source produced by this pool."""
-    # The validator stamps `// aegis-task: <name>` on every sampled program; without the stamp,
+    # The validator stamps `// probus-task: <name>` on every sampled program; without the stamp,
     # fall back to the constant names, which are unique per task.
-    marker = re.search(r"//\s*aegis-task:\s*([a-z0-9_]+)", c_code)
+    marker = re.search(r"//\s*probus-task:\s*([a-z0-9_]+)", c_code)
     candidates = [marker.group(1)] if marker and marker.group(1) in TASK_REGISTRY else list(TASK_REGISTRY)
     for name in candidates:
         _, regexes = TASK_REGISTRY[name]
@@ -682,6 +682,6 @@ def sample_task(task_name: str = None, seed: int = None) -> TaskInstance:
         factory = rng.choice([f for f, _ in TASK_REGISTRY.values()])
     inst = factory(seed)
     # Stamp the task name into the C source so fixtures and dashboards can identify it.
-    if "aegis-task:" not in inst.c_code:
-        inst.c_code = "// aegis-task: " + inst.task_name + "\n" + inst.c_code
+    if "probus-task:" not in inst.c_code:
+        inst.c_code = "// probus-task: " + inst.task_name + "\n" + inst.c_code
     return inst

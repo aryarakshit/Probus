@@ -1,8 +1,8 @@
-# Aegis — an adversarial Bittensor subnet for C → Safe Rust
+# Probus — an adversarial Bittensor subnet for C → Safe Rust
 
 > We don't ask an AI to write safe Rust. We pay a network of hackers to prove it wrong — and keep the translations nobody could break.
 
-**Bittensor Global Subnet Hackathon** entry · [hackquest.io](https://www.hackquest.io/hackathons/Bittensor-Global-Subnet-Hackathon) · repo: [github.com/aryarakshit/aegis-subnet](https://github.com/aryarakshit/aegis-subnet)
+**Bittensor Global Subnet Hackathon** entry · [hackquest.io](https://www.hackquest.io/hackathons/Bittensor-Global-Subnet-Hackathon) · repo: [github.com/aryarakshit/Probus](https://github.com/aryarakshit/Probus)
 
 `38 tests` · `8 C programs` · `4 LLM providers` · `Python 3.11+ · rustc · gcc/clang` · `MIT`
 
@@ -33,7 +33,7 @@ regressions. Nobody is paid to find them.
 
 ## The subnet
 
-Aegis makes finding them the most profitable thing on the network.
+Probus makes finding them the most profitable thing on the network.
 
 | Role | Incentive | What it actually does in this repo |
 |---|---|---|
@@ -105,9 +105,9 @@ Judges should not have to guess.
 | Breaker: static boundary analysis, mutation fuzzer, ASan/UBSan validity check, ddmin minimisation | **Real** (`neurons/difffuzz.py`, `neurons/miner_breaker.py`) |
 | Scoring: cubed pass-rate, 50 % anti-collusion bounty, invalid-input penalty, EMA weights | **Real** (`neurons/scoring.py`) |
 | Merkle-chained, content-addressed ledger of every round | **Real** (`neurons/ledger.py`, `scripts/verify_ledger.py`) |
-| Docker sandbox (`--network none --read-only --cap-drop ALL --pids-limit 64 --memory 256m`) | **Implemented, not exercised in the demo** (`sandbox/Dockerfile`, `sandbox/sandbox_runner.py`); the demo and tests run on the host toolchain with `AEGIS_ALLOW_UNSANDBOXED=1`. Build with `docker build -t c2rust-sandbox sandbox/` and drop `--no_docker`. |
+| Docker sandbox (`--network none --read-only --cap-drop ALL --pids-limit 64 --memory 256m`) | **Implemented, not exercised in the demo** (`sandbox/Dockerfile`, `sandbox/sandbox_runner.py`); the demo and tests run on the host toolchain with `PROBUS_ALLOW_UNSANDBOXED=1`. Build with `docker build -t c2rust-sandbox sandbox/` and drop `--no_docker`. |
 | `translator_weak` / `translator_cheater` | **Test fixtures** — deliberately flawed / `unsafe` submissions so the gate and breaker can be demonstrated deterministically. Labelled "fixture" everywhere. |
-| Bittensor substrate (wallet, axon, dendrite, metagraph, `set_weights`) | **Mocked in-process** (`substrate/__init__.py`). The real SDK is used automatically when `bittensor` is installed and neither `--mock` nor `AEGIS_MOCK=1` is set. Not yet registered on testnet — see below. |
+| Bittensor substrate (wallet, axon, dendrite, metagraph, `set_weights`) | **Mocked in-process** (`substrate/__init__.py`). The real SDK is used automatically when `bittensor` is installed and neither `--mock` nor `PROBUS_MOCK=1` is set. Not yet registered on testnet — see below. |
 
 ---
 
@@ -214,7 +214,7 @@ Server-Sent Events; the same API is usable without the page:
 
 ```bash
 # translator (any one provider)
-export ANTHROPIC_API_KEY=...            # default model claude-opus-5; override with AEGIS_LLM_MODEL
+export ANTHROPIC_API_KEY=...            # default model claude-opus-5; override with PROBUS_LLM_MODEL
 python neurons/miner_translator.py --mode llm --wallet_hotkey my_translator --mock
 
 # breaker (no model needed; --use_llm adds hypothesis inputs on top of the fuzzer)
@@ -244,13 +244,13 @@ python scripts/verify_ledger.py --ledger ./ledger --show 3
 | Variable / flag | Where | Meaning |
 |---|---|---|
 | `ANTHROPIC_API_KEY` · `OPENAI_API_KEY` · `GEMINI_API_KEY` · `OLLAMA_HOST` | env | credentials; the first one found selects the provider |
-| `AEGIS_LLM_PROVIDER` | env | force `anthropic` \| `openai` \| `gemini` \| `ollama` |
-| `AEGIS_LLM_MODEL` | env | model id (defaults: `claude-opus-5`, `gpt-4o`, `gemini-2.0-flash`, `qwen2.5-coder:7b`) |
-| `AEGIS_LLM_EFFORT` | env | Anthropic `output_config.effort` (`low` … `max`, default `high`) |
-| `AEGIS_LLM_RECORD=1` · `AEGIS_LLM_REPLAY=1` | env | write / read `dataset/llm_replay/` (replay is automatic with no credentials) |
-| `AEGIS_MOCK=1` or `--mock` | env / flag | in-process substrate instead of the real chain |
-| `AEGIS_ALLOW_UNSANDBOXED=1` or `--no_docker` | env / flag | host toolchain instead of the Docker sandbox (dev only) |
-| `AEGIS_ROUNDS_LOG` · `AEGIS_LEDGER_DIR` | env | where `server.py` writes the round log and ledger |
+| `PROBUS_LLM_PROVIDER` | env | force `anthropic` \| `openai` \| `gemini` \| `ollama` |
+| `PROBUS_LLM_MODEL` | env | model id (defaults: `claude-opus-5`, `gpt-4o`, `gemini-2.0-flash`, `qwen2.5-coder:7b`) |
+| `PROBUS_LLM_EFFORT` | env | Anthropic `output_config.effort` (`low` … `max`, default `high`) |
+| `PROBUS_LLM_RECORD=1` · `PROBUS_LLM_REPLAY=1` | env | write / read `dataset/llm_replay/` (replay is automatic with no credentials) |
+| `PROBUS_MOCK=1` or `--mock` | env / flag | in-process substrate instead of the real chain |
+| `PROBUS_ALLOW_UNSANDBOXED=1` or `--no_docker` | env / flag | host toolchain instead of the Docker sandbox (dev only) |
+| `PROBUS_ROUNDS_LOG` · `PROBUS_LEDGER_DIR` | env | where `server.py` writes the round log and ledger |
 | `--max_repairs` · `--self_fuzz_seconds` | translator | LLM repair rounds; the miner's own red-team budget per draft |
 | `--fuzz_seconds` · `--use_llm` | breaker | differential-fuzz budget per candidate; ask a model for hypothesis inputs first |
 | `--translator_timeout` · `--breaker_timeout` | validator | seconds a miner may take (LLM rounds are slow by nature) |
@@ -274,10 +274,10 @@ The substrate layer is written against the `bittensor` SDK surface (`wallet`, `s
 
 ```bash
 pip install bittensor
-btcli wallet new_coldkey --wallet.name aegis && btcli wallet new_hotkey --wallet.name aegis --wallet.hotkey validator
+btcli wallet new_coldkey --wallet.name probus && btcli wallet new_hotkey --wallet.name probus --wallet.hotkey validator
 btcli subnet create --subtensor.network test               # or register on an existing test netuid
-btcli subnet register --netuid <N> --subtensor.network test --wallet.name aegis --wallet.hotkey validator
-python neurons/validator.py --netuid <N> --subtensor_network test --wallet_name aegis --wallet_hotkey validator
+btcli subnet register --netuid <N> --subtensor.network test --wallet.name probus --wallet.hotkey validator
+python neurons/validator.py --netuid <N> --subtensor_network test --wallet_name probus --wallet_hotkey validator
 ```
 
 Not yet done at time of submission; everything above runs on the in-process mock with identical call shapes.

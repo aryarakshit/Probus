@@ -13,8 +13,8 @@ import re
 import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-os.environ.setdefault("AEGIS_ALLOW_UNSANDBOXED", "1")
-os.environ.setdefault("AEGIS_MOCK", "1")
+os.environ.setdefault("PROBUS_ALLOW_UNSANDBOXED", "1")
+os.environ.setdefault("PROBUS_MOCK", "1")
 
 from neurons import llm
 from dataset.tasks import infer_task, build_task
@@ -41,6 +41,6 @@ class StubModel:
 def install_stub_llm(buggy_first: bool = True) -> StubModel:
     stub = StubModel(buggy_first=buggy_first)
     llm.set_stub(stub)
-    os.environ["AEGIS_LLM_PROVIDER"] = "stub"
-    os.environ.pop("AEGIS_LLM_REPLAY", None)
+    os.environ["PROBUS_LLM_PROVIDER"] = "stub"
+    os.environ.pop("PROBUS_LLM_REPLAY", None)
     return stub

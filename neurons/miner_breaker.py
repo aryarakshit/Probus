@@ -192,7 +192,7 @@ class BreakerMiner:
 
 
 def parse_args(args=None):
-    parser = argparse.ArgumentParser(description="Aegis Breaker Miner (adversarial differential fuzzer)")
+    parser = argparse.ArgumentParser(description="Probus Breaker Miner (adversarial differential fuzzer)")
     parser.add_argument("--netuid", type=int, default=1)
     parser.add_argument("--wallet_name", type=str, default="default")
     parser.add_argument("--wallet_hotkey", type=str, default="breaker_fuzzer")

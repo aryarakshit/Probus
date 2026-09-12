@@ -1,5 +1,5 @@
 """
-Validator Neuron for Aegis Subnet (neurons/validator.py)
+Validator Neuron for Probus Subnet (neurons/validator.py)
 
 One validation round:
   1. sample a parameterized C task (fresh constants every round)
@@ -384,7 +384,7 @@ class Validator:
 
 
 def parse_args(args=None):
-    parser = argparse.ArgumentParser(description="Aegis C-to-Safe-Rust Subnet Validator")
+    parser = argparse.ArgumentParser(description="Probus C-to-Safe-Rust Subnet Validator")
     parser.add_argument("--netuid", type=int, default=1)
     parser.add_argument("--wallet_name", type=str, default="default")
     parser.add_argument("--wallet_hotkey", type=str, default="validator_hotkey")

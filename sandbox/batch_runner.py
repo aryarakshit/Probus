@@ -103,7 +103,7 @@ def run_batch(
         except Exception as e:
             stderr_buf = f"Execution error: {str(e)}".encode("utf-8", errors="replace")
             exit_code = -1
-            if os.environ.get("AEGIS_DEBUG_EXEC"):
+            if os.environ.get("PROBUS_DEBUG_EXEC"):
                 sys.stderr.write(f"[batch_runner] {binary_path}: {e!r}\n")
 
         elapsed = time.perf_counter() - t0

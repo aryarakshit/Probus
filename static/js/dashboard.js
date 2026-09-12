@@ -1,5 +1,5 @@
 /**
- * AEGIS dashboard controller.
+ * PROBUS dashboard controller.
  * One EventSource carries every validator event and log line; the rest is plain fetch.
  */
 (function () {
